@@ -1,0 +1,34 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "docker-build",
+			"label": "docker-build",
+			"platform": "python",
+			"dockerBuild": {
+				"tag": "lorenzobianchi:latest",
+				"dockerfile": "${workspaceFolder}/Dockerfile",
+				"context": "${workspaceFolder}",
+				"pull": true
+			}
+		},/*
+		{
+			"type": "docker-run",
+			"label": "docker-run: debug",
+			"dependsOn": [
+				"docker-build"
+			],
+			"python": {
+				"file": "/home/lorenzo.bianchi/aladin_container/OSCAR-TERAN-distillation/alad/test.py"
+			}
+		},*/
+		{
+			"type": "docker-run",
+			"label": "docker-run: debug",
+			"dependsOn": ["docker-build"],
+			"python": {
+			  "module": "${workspaceFolder}/aladin_container/OSCAR-TERAN-distillation"
+			}
+		  }
+	]
+}

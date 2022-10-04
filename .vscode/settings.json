@@ -1,0 +1,3 @@
+{
+    "docker.host": "unix:///run/user/1009/podman/podman.sock", //substitute 1009 with your podman id
+}
