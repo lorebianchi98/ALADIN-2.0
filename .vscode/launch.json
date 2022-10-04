@@ -14,9 +14,10 @@
             },
             "pathMappings": [
                 {
-                    "localRoot": "${workspaceFolder}/aladin_container/OSCAR-TERAN-distillation/alad",
+                    "localRoot": "${workspaceFolder}/aladin_container/ALADIN-2.0/alad", //replace with the path of the directory of the file you want to start debugging
                     "remoteRoot": "."
                 }
-            ]        }
+            ]       
+        }
     ]
 }

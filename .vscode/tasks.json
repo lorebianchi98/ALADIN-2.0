@@ -11,23 +11,13 @@
 				"context": "${workspaceFolder}",
 				"pull": true
 			}
-		},/*
-		{
-			"type": "docker-run",
-			"label": "docker-run: debug",
-			"dependsOn": [
-				"docker-build"
-			],
-			"python": {
-				"file": "/home/lorenzo.bianchi/aladin_container/OSCAR-TERAN-distillation/alad/test.py"
-			}
-		},*/
+		},
 		{
 			"type": "docker-run",
 			"label": "docker-run: debug",
 			"dependsOn": ["docker-build"],
 			"python": {
-			  "module": "${workspaceFolder}/aladin_container/OSCAR-TERAN-distillation"
+			  "module": "${workspaceFolder}/aladin_container/ALADIN-2.0" //replace with your path of the project
 			}
 		  }
 	]
