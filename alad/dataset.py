@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 import argparse
 import itertools
 import os
+import shelve
 import base64
 import os.path as op
 import random, json
@@ -10,6 +11,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
+import pickle
 
 from oscar.run_retrieval import restore_training_settings
 from oscar.utils.tsv_file import TSVFile
@@ -35,7 +37,6 @@ class RetrievalDataset(Dataset):
         super(RetrievalDataset, self).__init__()
         self.img_file = args.img_feat_file
         caption_file = op.join(args.data_dir, '{}_captions.pt'.format(split))
-        self.img_tsv = TSVFile(self.img_file)
         self.captions = torch.load(caption_file)
         self.img_keys = list(self.captions.keys())  # img_id as int
         if not type(self.captions[self.img_keys[0]]) == list:
@@ -45,29 +46,40 @@ class RetrievalDataset(Dataset):
         imgid2idx_file = op.join(op.dirname(self.img_file), 'imageid2idx.json')
         self.image_id2idx = json.load(open(imgid2idx_file))  # img_id as string
 
+        self.predictions_shelve = shelve.open(self.img_file)  
+        
         if args.add_od_labels:
             label_data_dir = op.dirname(self.img_file)
-            label_file = os.path.join(label_data_dir, "predictions.tsv")
-            self.label_tsv = TSVFile(label_file)
-            self.labels = {}
-            for line_no in range(self.label_tsv.num_rows()):
-                row = self.label_tsv.seek(line_no)
-                image_id = row[0]
-                if int(image_id) in self.img_keys:
-                    results = json.loads(row[1])
-                    objects = results['objects'] if type(
-                        results) == dict else results
-                    self.labels[int(image_id)] = {
-                        "image_h": results["image_h"] if type(
-                            results) == dict else 600,
-                        "image_w": results["image_w"] if type(
-                            results) == dict else 800,
-                        "class": [cur_d['class'] for cur_d in objects],
-                        "boxes": np.array([cur_d['rect'] for cur_d in objects],
-                                          dtype=np.float32)
-                    }
-            self.label_tsv._fp.close()
-            self.label_tsv._fp = None
+            label_pkl_path = os.path.join(label_data_dir, "labels.pkl")
+            # get the labels from pickle file if exists
+            if (os.path.exists(label_pkl_path)):
+                with open(label_pkl_path, 'rb') as fid:
+                    self.labels = pickle.load(fid)
+            else:
+                label_file = self.img_file
+                
+                self.labels = {}
+                
+                print("Retrieving predictions")
+                for image_id in tqdm(self.predictions_shelve):
+                    row = self.predictions_shelve[image_id]
+                    if int(image_id) in self.img_keys:
+                        objects = row['objects']
+                        self.labels[int(image_id)] = {
+                            "image_h": row['image_h'],
+                            "image_w": row['image_w'],
+                            "class": [cur_d['class'] for cur_d in objects],
+                            "boxes": np.array([cur_d['rect'] for cur_d in objects], dtype=np.float32)
+                        }
+                #TODO: find the right way to close the shelve
+                #not closing the shelve improves get_image performances
+                #self.predictions_shelve.close()
+                #self.predictions_shelve = None
+                #caching self.labels
+                with open(label_pkl_path, 'wb') as fid:
+                    pickle.dump(self.labels, fid)
+                
+            
 
         if is_train:
             self.num_captions_per_img = args.num_captions_per_img_train
@@ -316,10 +328,8 @@ class RetrievalDataset(Dataset):
 
     def get_image(self, image_id):
         image_idx = self.image_id2idx[str(image_id)]
-        row = self.img_tsv.seek(image_idx)
-        num_boxes = int(row[1])
-        features = np.frombuffer(base64.b64decode(row[-1]),
-                                 dtype=np.float32).reshape((num_boxes, -1))
+        objects = self.predictions_shelve[str(image_id)]['objects']
+        features = np.array([obj['features'] for obj in objects], dtype='float32')
         t_features = torch.from_numpy(features)
         return t_features
 
