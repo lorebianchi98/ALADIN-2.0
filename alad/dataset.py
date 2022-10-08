@@ -46,11 +46,11 @@ class RetrievalDataset(Dataset):
         imgid2idx_file = op.join(op.dirname(self.img_file), 'imageid2idx.json')
         self.image_id2idx = json.load(open(imgid2idx_file))  # img_id as string
 
-        self.predictions_shelve = shelve.open(self.img_file)  
+        self.predictions_shelve = shelve.open(self.img_file, flag='r')  
         
         if args.add_od_labels:
             label_data_dir = op.dirname(self.img_file)
-            label_pkl_path = os.path.join(label_data_dir, "labels.pkl")
+            label_pkl_path = os.path.join(label_data_dir, f"labels_{split}.pkl")
             # get the labels from pickle file if exists
             if (os.path.exists(label_pkl_path)):
                 with open(label_pkl_path, 'rb') as fid:
@@ -61,8 +61,8 @@ class RetrievalDataset(Dataset):
                 self.labels = {}
                 
                 print("Retrieving predictions")
-                for image_id in tqdm(self.predictions_shelve):
-                    row = self.predictions_shelve[image_id]
+                for image_id in tqdm(self.img_keys):
+                    row = self.predictions_shelve[str(image_id)]
                     if int(image_id) in self.img_keys:
                         objects = row['objects']
                         self.labels[int(image_id)] = {
@@ -328,8 +328,19 @@ class RetrievalDataset(Dataset):
 
     def get_image(self, image_id):
         image_idx = self.image_id2idx[str(image_id)]
-        objects = self.predictions_shelve[str(image_id)]['objects']
+        img_data = self.predictions_shelve[str(image_id)]
+        objects = img_data['objects']
         features = np.array([obj['features'] for obj in objects], dtype='float32')
+
+        # concatenate positional information to the image feature (so that they become 1024 + 6 = 1030-dimensional)
+        w = img_data["image_w"]
+        h = img_data["image_h"]
+        rect = np.asarray([obj["rect"] for obj in objects], dtype='float32')
+        mask = np.array([w, h, w, h], dtype=np.float32)
+        rect = np.clip(rect / mask, 0, 1)
+        pos_feat = np.concatenate((rect, rect[:, [3]]-rect[:, [1]], rect[:, [2]]-rect[:, [0]]), axis=1).astype(np.float32)
+        features = np.hstack((features, pos_feat))
+
         t_features = torch.from_numpy(features)
         return t_features
 

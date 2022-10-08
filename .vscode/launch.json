@@ -18,6 +18,47 @@
                     "remoteRoot": "."
                 }
             ]       
-        }
+        },
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Test",
+            "type": "python",
+            "request": "launch",
+            "program": "alad/test.py",
+            "console": "integratedTerminal",
+            "args": ["--data_dir", "/media/nicola/SSD/OSCAR_Datasets/coco_ir",
+                "--img_feat_file", "/media/nicola/SSD/OSCAR_Datasets/coco_ir/coco_2014_train_val/model_0060000_detic/predictions",
+                "--eval_model_dir", "/media/nicola/SSD/OSCAR_Datasets/checkpoint-0132780",
+                "--max_seq_length", "50",
+                "--max_img_seq_length", "34",
+                "--eval_img_keys_file", "test_img_keys_1k.tsv",
+                "--num_workers", "4",
+                "--load_checkpoint", "/media/nicola/Data/Workspace/OSCAR/Oscar/teran/runs/FINAL/TRANSF_LEARN/teran_transfer_from_oscar_depth-aggregation-none_NEWARCH_transferred_0teran_2tern_distill/model_best_rsum.pth.tar"],
+            "justMyCode": true
+        },
+        {
+            "name": "Train",
+            "type": "python",
+            "request": "launch",
+            "program": "alad/train.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--config", "alad/configs/alad-alignment-triplet.yaml",
+                "--data_dir", "/media/nicola/SSD/OSCAR_Datasets/coco_ir",
+                "--img_feat_file", "/media/nicola/SSD/OSCAR_Datasets/coco_ir/coco_2014_train_val/model_0060000_detic/predictions",
+                "--eval_model_dir", "/media/nicola/SSD/OSCAR_Datasets/checkpoint-0132780",
+                "--max_seq_length", "50",
+                "--max_img_seq_length", "34",
+                "--num_workers", "0",
+                "--logger_name", "test"],
+            "justMyCode": true
+        },
     ]
 }

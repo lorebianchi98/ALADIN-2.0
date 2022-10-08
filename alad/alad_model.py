@@ -42,6 +42,10 @@ class JointTextImageTransformerEncoder(nn.Module):
         bert_config.output_hidden_states = True
         self.oscar_model = model_class.from_pretrained(oscar_checkpoint, config=bert_config)
 
+        # override the bert.img_embedding linear layer
+        self.oscar_model.bert.img_embedding = nn.Linear(1030, 768)
+        self.oscar_model.bert.img_dim = 1030
+
         # self.oscar_model = oscar_model
         dropout = config['model']['dropout']
         self.freeze_teran = config['model']['freeze-teran'] if 'freeze-teran' in config['model'] else False
