@@ -35,6 +35,10 @@ class RetrievalDataset(Dataset):
 
         """
         super(RetrievalDataset, self).__init__()
+
+        global logger
+        logger = setup_logger(f"dataset_{split}", None, 0)
+
         self.img_file = args.img_feat_file
         caption_file = op.join(args.data_dir, '{}_captions.pt'.format(split))
         self.captions = torch.load(caption_file)
@@ -79,7 +83,12 @@ class RetrievalDataset(Dataset):
                 with open(label_pkl_path, 'wb') as fid:
                     pickle.dump(self.labels, fid)
                 
-            
+        # should not happen (at this moment happens for only 1 image...), but if 0 detections found in the image, just skip that image
+        no_detections = [k for k, c in self.labels.items() if len(c['class'])==0]
+        for d in no_detections:
+            logger.warning(f'Ignoring image {d} which has no detections...')
+            del self.labels[d]
+            self.img_keys.remove(d)
 
         if is_train:
             self.num_captions_per_img = args.num_captions_per_img_train
