@@ -10,6 +10,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, RandomSampler, SequentialSampler
+from torchvision.ops import batched_nms
 from tqdm import tqdm
 import pickle
 
@@ -39,7 +40,10 @@ class RetrievalDataset(Dataset):
         global logger
         logger = setup_logger(f"dataset_{split}", None, 0)
 
+        self.detection_type = args.detection_type
         self.img_file = args.img_feat_file
+        label_data_dir = op.dirname(self.img_file)
+        self.img_tsv = TSVFile(os.path.join(label_data_dir, "features.tsv")) if self.detection_type == 'det+fast' else None
         caption_file = op.join(args.data_dir, '{}_captions.pt'.format(split))
         self.captions = torch.load(caption_file)
         self.img_keys = list(self.captions.keys())  # img_id as int
@@ -52,19 +56,23 @@ class RetrievalDataset(Dataset):
 
         self.predictions_shelve = shelve.open(self.img_file, flag='r')  
         
+        self.box_ordering = {} # in case the detection_type is det+fast we keep in this dictionary the order of the boxes
+                               # survived to NMS based on the normalized score in the format {image_id: [ordered list of boxes]}
+        
         if args.add_od_labels:
+            #retrieves the detections of Detic from the shelve
             label_data_dir = op.dirname(self.img_file)
-            label_pkl_path = os.path.join(label_data_dir, f"labels_{split}.pkl")
-            # get the labels from pickle file if exists
-            if (os.path.exists(label_pkl_path)):
-                with open(label_pkl_path, 'rb') as fid:
+            label_detic_pkl_path = os.path.join(label_data_dir, f"detic_labels_{split}.pkl")
+            # get the labels of Detic from pickle file if exists for this split 
+            if (os.path.exists(label_detic_pkl_path)):
+                with open(label_detic_pkl_path, 'rb') as fid:
                     self.labels = pickle.load(fid)
             else:
                 label_file = self.img_file
                 
                 self.labels = {}
                 
-                print("Retrieving predictions")
+                print("Retrieving predictions from shelve:")
                 for image_id in tqdm(self.img_keys):
                     row = self.predictions_shelve[str(image_id)]
                     if int(image_id) in self.img_keys:
@@ -73,16 +81,121 @@ class RetrievalDataset(Dataset):
                             "image_h": row['image_h'],
                             "image_w": row['image_w'],
                             "class": [cur_d['class'] for cur_d in objects],
+                            "conf": [cur_d['conf'] for cur_d in objects], # relevant only if det+fast is the detection_type
                             "boxes": np.array([cur_d['rect'] for cur_d in objects], dtype=np.float32)
                         }
-                #TODO: find the right way to close the shelve
-                #not closing the shelve improves get_image performances
-                #self.predictions_shelve.close()
-                #self.predictions_shelve = None
                 #caching self.labels
-                with open(label_pkl_path, 'wb') as fid:
+                with open(label_detic_pkl_path, 'wb') as fid:
                     pickle.dump(self.labels, fid)
+        
+            # if in the args it is specified the det+fast detection type, we also retrieve the detections from faster 
+            # then we effettuate NMS with the score of Faster boxes prioritarized
+            # then we normalize the scores and order the box decrescently based on this value
+            if self.detection_type == 'det+fast':
+                label_file_tsv = os.path.join(label_data_dir, "predictions.tsv")
+                self.label_tsv = TSVFile(label_file_tsv)
+                #in order to normalize score we calculate the mean and the standard deviation of the two sets
+                #Detic
+                det_scores = []
+                for key in self.labels:
+                    score_tmp = [x for x in self.labels[key]['conf']]
+                    det_scores += score_tmp
+                det_mean = np.array(det_scores).mean()
+                det_std = np.array(det_scores).std()
+                #Faster
+                fast_scores = []
+                for line_no in range(self.label_tsv.num_rows()):
+                    row = self.label_tsv.seek(line_no)
+                    image_id = row[0]
+                    if int(image_id) in self.img_keys:
+                        results = json.loads(row[1])
+                        objects = results['objects']
+                        score_tmp = [x['conf'] for x in objects]
+                        fast_scores += score_tmp
+                fast_mean = np.array(fast_scores).mean()
+                fast_std = np.array(fast_scores).std()
                 
+        
+                for line_no in tqdm(range(self.label_tsv.num_rows())):
+                    row = self.label_tsv.seek(line_no)
+                    image_id = row[0]
+                    if int(image_id) in self.img_keys:
+                        results = json.loads(row[1])
+                        objects = results['objects'] if type(
+                            results) == dict else results
+                        # check if the image is not present in the Detic detections (it should never happen)
+                        if (int(image_id) not in self.labels.keys()):
+                            self.labels[int(image_id)] = {
+                                "image_h": results["image_h"] if type(
+                                    results) == dict else 600,
+                                "image_w": results["image_w"] if type(
+                                    results) == dict else 800,
+                                "class": [cur_d['class'] for cur_d in objects],
+                                "boxes": np.array([cur_d['rect'] for cur_d in objects],
+                                                dtype=np.float32)
+                            }
+                        # if there is an entry registered for that key we append class and boxes object
+                        else:
+                            #retrieving Faster informations
+                            fast_classes = [cur_d['class'] for cur_d in objects]
+                            fast_confs = [cur_d['conf'] for cur_d in objects]
+                            fast_boxes = np.array([cur_d['rect'] for cur_d in objects],
+                                                dtype=np.float32)
+                            
+                            # retrieving Detic informations
+                            det_classes = self.labels[int(image_id)]['class']
+                            det_confs = self.labels[int(image_id)]['conf']
+                            det_boxes = self.labels[int(image_id)]['boxes']
+                            
+                            # normalizations of the scores
+                            fast_confs_norm = self.__normalize(fast_confs.copy(), fast_mean, fast_std)
+                            det_confs_norm = self.__normalize(det_confs.copy(), det_mean, det_std)
+                            
+                            # building a prioritized score for Faster, in order to keep Faster boxes in case of doubt
+                            fast_confs_prior = self.__prioritize(fast_confs.copy(), det_confs)
+                            
+                            # translations of classes in integer forms (policy of similiarity between Faster dictionary and Detic dictionary to improve)
+                            fast_classes_id, det_classes_id = self.__get_int_labels(fast_classes, det_classes)
+                            
+                            # merging the informations of the two detectors
+                            total_boxes = np.append(fast_boxes, det_boxes,axis=0) if len(det_boxes) > 0 else fast_boxes
+                            total_confs = fast_confs_norm + det_confs_norm
+                            total_confs_prior = fast_confs_prior + det_confs # using the prioritarized confidence for the nms
+                            total_classes = fast_classes + det_classes
+                            total_classes_id = fast_classes_id + det_classes_id
+                            
+                            # applying Non Maximum Suppression 
+                            box_to_keep = batched_nms(torch.FloatTensor(total_boxes),
+                                                        torch.FloatTensor(total_confs_prior),
+                                                        torch.IntTensor(total_classes_id),
+                                                        0.5)[:100]
+                            
+                            # extracting the confidence of the boxes kept
+                            total_confs_filtered = []
+                            for id, x in enumerate(total_confs):
+                                if id in box_to_keep:
+                                    total_confs_filtered.append(x)    
+                            
+                            box_to_keep = [x for _, x in sorted(zip(total_confs_filtered, box_to_keep), reverse=True)] # ordering the boxes in order of normalized confidence 
+                            
+                            self.box_ordering[int(image_id)] = box_to_keep # saving the order of the boxes in order to order the features in the get_image
+                            
+                            # saving the ordered informations of boxes inside self.labels
+                            filtered_boxes = []
+                            filtered_classes = []
+                            filtered_confs = [] # never used from now
+                            for id in box_to_keep:
+                                filtered_boxes.append(total_boxes[id])
+                                filtered_classes.append(total_classes[id])
+                                filtered_confs.append(total_confs[id])
+                                
+                            self.labels[int(image_id)]['boxes'] = filtered_boxes
+                            self.labels[int(image_id)]['class'] = filtered_classes
+                            self.labels[int(image_id)]['confs'] = filtered_confs
+                
+                self.label_tsv._fp.close()
+                self.label_tsv._fp = None
+        
         # should not happen (at this moment happens for only 1 image...), but if 0 detections found in the image, just skip that image
         no_detections = [k for k, c in self.labels.items() if len(c['class'])==0]
         for d in no_detections:
@@ -337,9 +450,11 @@ class RetrievalDataset(Dataset):
 
     def get_image(self, image_id):
         image_idx = self.image_id2idx[str(image_id)]
+        
+        #Detic features
         img_data = self.predictions_shelve[str(image_id)]
         objects = img_data['objects']
-        features = np.array([obj['features'] for obj in objects], dtype='float32')
+        features_det = np.array([obj['features'] for obj in objects], dtype='float32')
 
         # concatenate positional information to the image feature (so that they become 1024 + 6 = 1030-dimensional)
         w = img_data["image_w"]
@@ -348,11 +463,104 @@ class RetrievalDataset(Dataset):
         mask = np.array([w, h, w, h], dtype=np.float32)
         rect = np.clip(rect / mask, 0, 1)
         pos_feat = np.concatenate((rect, rect[:, [3]]-rect[:, [1]], rect[:, [2]]-rect[:, [0]]), axis=1).astype(np.float32)
-        features = np.hstack((features, pos_feat))
-
+        features_det = np.hstack((features_det, pos_feat))
+        features = features_det
+        
+        # in case the detection_type is setted on det+fast we also retrieve Faster features
+        # then we pad Detic features and we effettuate the sorting
+        if self.detection_type == 'det+fast':
+            row = self.img_tsv.seek(image_idx)
+            num_boxes = int(row[1])
+            features_fast = np.frombuffer(base64.b64decode(row[-1]),
+                                    dtype=np.float32).reshape((num_boxes, -1))
+            
+            #add padding to Detic features
+            len_diff = features_fast.shape[1] - features_det.shape[1]
+            pad = np.zeros((len(features_det), len_diff), dtype=np.float32)
+            features_det = np.hstack((features_det, pad))
+            
+            features_tmp = np.append(features_det, features_fast, axis=0)
+            #keeping only the relevant boxes using the normalized score order
+            features = [features_tmp[id] for id in self.box_ordering[image_id]] 
+            features = np.array(features,dtype=np.float32)
         t_features = torch.from_numpy(features)
         return t_features
 
+
+    # Utility functions
+    def __prioritize(self, first_scores, second_scores):
+        """
+        Gives priority to the first set of scores summing each element with the max of the second set
+        """
+        max_to_sum = max(second_scores) if len(second_scores) > 0 else 0
+        for i in range(len(first_scores)):
+            first_scores[i] += max_to_sum
+        return first_scores
+
+    def __normalize(self, scores, mean, std): 
+        """
+        Normalize the scores
+        """
+        # mean = np.mean(scores)
+        # std = np.std(scores)
+        for i in range(len(scores)):
+            scores[i] = (scores[i] - mean) / std
+        return scores
+    
+    def __get_similar_int(self, label, dictionary):
+        """
+        Return the index of a word in the dictionary where a word of label is contained in it
+        """
+        index_parenthesis = label.find('(')
+        words = []
+        if index_parenthesis >= 0:
+            words = words[:-1]
+            words.append(label[index_parenthesis:-1].split('_')[-1])
+            label = label[:index_parenthesis]
+            if label[-1] == '_':
+                label = label[:-1]
+        words.extend(label.split('_'))
+        
+        for word in words:
+            for key in dictionary:
+                if key.find(word) > -1:
+                    return key
+                
+        return None
+    
+    def __get_int_labels(self, labels1, labels2):
+        """
+        Transforms the set of labels in integers
+        In the second pack of labels if one label is not present in the first set, we put a label of a word that we have in common with the first set
+        """
+        #transformation of string of labels to int
+        labels1_id = [None] * len(labels1)
+        labels2_id = [None] * len(labels2)
+        dictionary = {}
+        
+        index = 0
+        # transform label to int for Faster
+        for i, elem in enumerate(labels1):
+            if elem in list(dictionary.keys()):
+                labels1_id[i] = dictionary[elem]
+            else:
+                labels1_id[i] = index
+                dictionary[elem] = index
+                index += 1
+                
+        #transform label to int for Detic
+        for i, elem in enumerate(labels2):
+            if elem in list(dictionary.keys()):
+                labels2_id[i] = dictionary[elem]
+            elif self.__get_similar_int(elem, list(dictionary.keys())):
+                labels2_id[i] = dictionary[self.__get_similar_int(elem, list(dictionary.keys()))]
+            else:
+                labels2_id[i] = index
+                dictionary[elem] = index
+                index += 1
+        
+        return labels1_id, labels2_id
+    
     def __len__(self):
         return len(self.img_keys) * self.num_captions_per_img
 

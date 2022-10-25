@@ -129,7 +129,9 @@ def main():
                         help="Model directory for evaluation.")
     parser.add_argument("--no_cuda", action='store_true', help="Avoid using CUDA.")
     parser.add_argument('--seed', type=int, default=88, help="random seed for initialization.")
-
+    parser.add_argument('--detection_type', type=str, default='det', help='Select the box detection to retrieve between [det, det+fast]'
+                                                                           'det: Use only the detections from Detic'
+                                                                           'det+fast: Use both the detections from Detic and Faster')
     # -----------------------------------------------------------------------------------------
     # TERAN Arguments
     # -----------------------------------------------------------------------------------------
@@ -173,6 +175,10 @@ def main():
     #     torch.cuda.set_limit_lms(11000 * 1024 * 1024)
     #     print('[LMS=On limit=' + str(torch.cuda.get_limit_lms()) + ']')
 
+    #check if the type od detection_type is valid
+    if args.detection_type != 'det' and args.detection_type != 'det+fast':
+         raise ValueError("detection_type should assume \'det\' or \'det+fast\' values")
+
     with open(args.config, 'r') as ymlfile:
         config = yaml.load(ymlfile)
 
@@ -201,6 +207,8 @@ def main():
     # ------------------------------------------------------------------------------------------------------------------
     # Data initialization (data pipeline is from Oscar)
     # ------------------------------------------------------------------------------------------------------------------
+
+    config['detection_type'] = args.detection_type
 
     args = restore_training_settings(args)
 

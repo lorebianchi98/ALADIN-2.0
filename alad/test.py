@@ -129,7 +129,9 @@ def main():
                         help="Model directory for evaluation.")
     parser.add_argument("--no_cuda", action='store_true', help="Avoid using CUDA.")
     parser.add_argument('--seed', type=int, default=88, help="random seed for initialization.")
-
+    parser.add_argument('--detection_type', type=str, default='det', help='Select the box detection to retrieve between [det, det+fast]'
+                                                                           'det: Use only the detections from Detic'
+                                                                           'det+fast: Use both the detections from Detic and Faster')
     # -----------------------------------------------------------------------------------------
     # TERAN Arguments
     # -----------------------------------------------------------------------------------------
@@ -160,6 +162,10 @@ def main():
     # with open(args.config, 'r') as ymlfile:
     #     config = yaml.load(ymlfile)
 
+    #check if the type od detection_type is valid
+    if args.detection_type != 'det' and args.detection_type != 'det+fast':
+         raise ValueError("detection_type should assume \'det\' or \'det+fast\' values")
+
     # check if checkpoint exists
     filename = args.load_checkpoint
     if os.path.isfile(filename):
@@ -171,7 +177,8 @@ def main():
     config = loaded_checkpoint['config']
     args.per_gpu_train_batch_size = config['training']['bs']
     args.per_gpu_eval_batch_size = config['training']['bs']
-
+    
+    config['detection_type'] = args.detection_type
     # Warn: these flags are misleading: they switch Oscar in the right configuration for the Alad setup (see dataset.py)
     args.do_test = True
     args.do_eval = True
@@ -246,7 +253,6 @@ def main():
     if torch.cuda.is_available():
         student_model.cuda()
     print('Model checkpoint loaded!')
-
     test(test_loader, student_model, alignment_mode=alignment_mode)
 
 
