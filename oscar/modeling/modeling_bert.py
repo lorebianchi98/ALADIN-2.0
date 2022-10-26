@@ -196,14 +196,14 @@ class BertImgModel(BertPreTrainedModel):
         for layer, heads in heads_to_prune.items():
             self.encoder.layer[layer].attention.prune_heads(heads)
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None,
+    def forward(self, input_ids, input_clip=None, token_type_ids=None, attention_mask=None,
             position_ids=None, head_mask=None, img_feats=None,
             encoder_history_states=None):
         if attention_mask is None:
-            attention_mask = torch.ones_like(input_ids)
+            attention_mask = torch.ones_like(input_ids) if input_clip is None else torch.ones_like(input_clip[..., 0])
 
         if token_type_ids is None:
-            token_type_ids = torch.zeros_like(input_ids)
+            token_type_ids = torch.zeros_like(input_ids) if input_clip is None else torch.ones_like(input_clip[..., 0])
 
         # We create a 3D attention mask from a 2D tensor mask.
         # Sizes are [batch_size, 1, 1, to_seq_length]
@@ -241,7 +241,8 @@ class BertImgModel(BertPreTrainedModel):
         else:
             head_mask = [None] * self.config.num_hidden_layers
 
-        embedding_output = self.embeddings(input_ids, position_ids=position_ids,
+        textual_inputs = input_clip if input_clip is not None else input_ids
+        embedding_output = self.embeddings(textual_inputs, position_ids=position_ids,
                 token_type_ids=token_type_ids)
         if encoder_history_states:
             assert img_feats is None, "Cannot take image features while using encoder history states"
