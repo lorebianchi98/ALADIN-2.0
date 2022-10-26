@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 
+from CLIP import clip
+
 from alad.loss import ContrastiveLoss, AlignmentContrastiveLoss, DistillationLoss, \
     AttentionDistillationLoss
 from oscar.modeling.modeling_bert import ImageBertForSequenceClassification
@@ -33,6 +35,12 @@ class JointTextImageTransformerEncoder(nn.Module):
     """
     def __init__(self, config, oscar_checkpoint):
         super().__init__()
+
+        # Init CLIP
+        self.clip_enabled = config['enable_clip']
+        if self.clip_enabled:
+            self.device = 'cuda' if torch.cuda.is_available() else "cpu"
+            self.clip_model, self.clip_preprocess = clip.load("ViT-B/32", device=self.device)
 
         # Init OSCAR
         config_class = BertConfig
@@ -125,14 +133,25 @@ class JointTextImageTransformerEncoder(nn.Module):
 
     def forward(self, examples_imgs, examples_txts):
         grad_enabled = not self.freeze_teran
+        
         with torch.set_grad_enabled(grad_enabled):
-            # process captions by using oscar
-            inputs_txts = {
-                'input_ids': examples_txts[0],
-                'attention_mask': examples_txts[1],
-                'token_type_ids': examples_txts[2],
-                'img_feats': None
-            }
+            if not self.clip_enabled:
+                # process captions by using oscar
+                inputs_txts = {
+                    'input_ids': examples_txts[0],
+                    'attention_mask': examples_txts[1],
+                    'token_type_ids': examples_txts[2],
+                    'img_feats': None
+                }
+            else:
+                 _, clip_features = self.clip_model.encode_text(examples_txts[0])
+                ## qui bisognerebbe filtrare le features in modo che vengano considerati solo i primi max_seq_len - 1 token + end token
+                inputs_txts = {
+                    'input_clip': clip_features,
+                    'attention_mask': examples_txts[1],
+                    'token_type_ids': examples_txts[2],
+                    'img_feats': None
+                }
             txt_bert_output = self.oscar_model.bert(**inputs_txts)
 
             # process image regions using oscar

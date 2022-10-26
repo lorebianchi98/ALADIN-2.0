@@ -14,6 +14,8 @@ from torchvision.ops import batched_nms
 from tqdm import tqdm
 import pickle
 
+from CLIP import clip
+
 from oscar.run_retrieval import restore_training_settings
 from oscar.utils.tsv_file import TSVFile
 from oscar.utils.logger import setup_logger
@@ -41,6 +43,9 @@ class RetrievalDataset(Dataset):
         logger = setup_logger(f"dataset_{split}", None, 0)
 
         self.detection_type = args.detection_type
+        self.clip_enabled = args.enable_clip
+        self.device = 'cuda' if torch.cuda.is_available() else "cpu"
+        
         self.img_file = args.img_feat_file
         label_data_dir = op.dirname(self.img_file)
         self.img_tsv = TSVFile(os.path.join(label_data_dir, "features.tsv")) if self.detection_type == 'det+fast' else None
@@ -338,27 +343,52 @@ class RetrievalDataset(Dataset):
                           cls_token_segment_id=0, pad_token_segment_id=0,
                           sequence_a_segment_id=0, sequence_b_segment_id=1, return_lengths=False):
         assert (text_a is None and img_feat is not None and text_b is not None) or (text_a is not None and img_feat is None and text_b is None)
-        if text_a is not None:
-            tokens_a = self.tokenizer.tokenize(text_a)
-            if len(tokens_a) > self.args.max_seq_length - 2:
-                tokens_a = tokens_a[:(self.args.max_seq_length - 2)]
+        
+        if not self.clip_enabled:
+            if text_a is not None:
+                
+                tokens_a = self.tokenizer.tokenize(text_a)
+                if len(tokens_a) > self.args.max_seq_length - 2:
+                    tokens_a = tokens_a[:(self.args.max_seq_length - 2)]
 
-            tokens = [self.tokenizer.cls_token] + tokens_a + [self.tokenizer.sep_token]
-            segment_ids = [cls_token_segment_id] + [sequence_a_segment_id] * (len(tokens_a) + 1)
-            seq_len = len(tokens)
-        if text_b is not None:
-            tokens_b = self.tokenizer.tokenize(text_b)
-            if len(tokens_b) > self.max_seq_len - 2:
-                tokens_b = tokens_b[: (self.max_seq_len - 2)]
-            tokens = [cls_token_segment_id] + tokens_b + [self.tokenizer.sep_token]
-            segment_ids = [cls_token_segment_id] + [sequence_b_segment_id] * (len(tokens_b) + 1)
-            seq_len = len(tokens)
+                tokens = [self.tokenizer.cls_token] + tokens_a + [self.tokenizer.sep_token]
+                segment_ids = [cls_token_segment_id] + [sequence_a_segment_id] * (len(tokens_a) + 1)
+                seq_len = len(tokens)
+            if text_b is not None:
+                tokens_b = self.tokenizer.tokenize(text_b)
+                if len(tokens_b) > self.max_seq_len - 2:
+                    tokens_b = tokens_b[: (self.max_seq_len - 2)]
+                tokens = [cls_token_segment_id] + tokens_b + [self.tokenizer.sep_token]
+                segment_ids = [cls_token_segment_id] + [sequence_b_segment_id] * (len(tokens_b) + 1)
+                seq_len = len(tokens)
 
-        seq_padding_len = self.max_seq_len - seq_len
-        tokens += [self.tokenizer.pad_token] * seq_padding_len
-        segment_ids += [pad_token_segment_id] * seq_padding_len
-        input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-
+            seq_padding_len = self.max_seq_len - seq_len
+            tokens += [self.tokenizer.pad_token] * seq_padding_len
+            segment_ids += [pad_token_segment_id] * seq_padding_len
+            input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+        # if CLIP is enabled we tokenize with CLIP
+        else:
+            clip_tokens_len = 77
+            if text_a is not None:
+                text_a = ' '.join(text_a.split(' ')[:self.max_seq_len - 2]) # adjusting text number of words
+                input_ids = clip.tokenize([text_a], context_length=100).to(self.device)[0].tolist()
+                end_token = 49407 
+                input_ids = input_ids[:clip_tokens_len - 1] + [end_token] # if too much tokens are generated we cut it
+                seq_len = np.count_nonzero(input_ids)
+                seq_padding_len = len(input_ids) - seq_len
+                segment_ids = [cls_token_segment_id] + [sequence_a_segment_id] * (seq_len - 1)
+                segment_ids += [pad_token_segment_id] * seq_padding_len
+            if text_b is not None:
+                text_b = ' '.join(text_b.split(' ')[:self.max_seq_len - 2]) # adjusting text number of words
+                input_ids = clip.tokenize([text_b], context_length=100).to(self.device)[0].tolist()
+                end_token = 49407 
+                input_ids = input_ids[:clip_tokens_len - 1] + [end_token] # if too much tokens are generated we cut it
+                seq_len = np.count_nonzero(input_ids)
+                seq_padding_len = len(input_ids) - seq_len
+                segment_ids = [cls_token_segment_id] + [sequence_b_segment_id] * (seq_len - 1)
+                segment_ids += [pad_token_segment_id] * seq_padding_len
+                
+            
         if img_feat is not None:
             # image features
             img_len = img_feat.shape[0]
@@ -408,6 +438,9 @@ class RetrievalDataset(Dataset):
         input_ids = torch.tensor(input_ids, dtype=torch.long)
         attention_mask = torch.tensor(attention_mask, dtype=torch.long)
         segment_ids = torch.tensor(segment_ids, dtype=torch.long)
+        end = False
+        if end:
+            assert False
         if return_lengths:
             return input_ids, attention_mask, segment_ids, img_feat, seq_len, img_len
         else:
