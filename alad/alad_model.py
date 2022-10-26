@@ -144,7 +144,7 @@ class JointTextImageTransformerEncoder(nn.Module):
                     'img_feats': None
                 }
             else:
-                 _, clip_features = self.clip_model.encode_text(examples_txts[0])
+                _, clip_features = self.clip_model.encode_text(examples_txts[0])
                 ## qui bisognerebbe filtrare le features in modo che vengano considerati solo i primi max_seq_len - 1 token + end token
                 inputs_txts = {
                     'input_clip': clip_features,
