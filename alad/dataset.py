@@ -438,9 +438,6 @@ class RetrievalDataset(Dataset):
         input_ids = torch.tensor(input_ids, dtype=torch.long)
         attention_mask = torch.tensor(attention_mask, dtype=torch.long)
         segment_ids = torch.tensor(segment_ids, dtype=torch.long)
-        end = False
-        if end:
-            assert False
         if return_lengths:
             return input_ids, attention_mask, segment_ids, img_feat, seq_len, img_len
         else:

@@ -6,6 +6,8 @@ import torch.backends.cudnn as cudnn
 
 from CLIP import clip
 
+import numpy as np
+
 from alad.loss import ContrastiveLoss, AlignmentContrastiveLoss, DistillationLoss, \
     AttentionDistillationLoss
 from oscar.modeling.modeling_bert import ImageBertForSequenceClassification
@@ -147,7 +149,20 @@ class JointTextImageTransformerEncoder(nn.Module):
                 }
             else:
                 _, clip_features = self.clip_model.encode_text(examples_txts[0])
-                ## qui bisognerebbe filtrare le features in modo che vengano considerati solo i primi max_seq_len - 1 token + end token
+                # since the pretrained model of CLIP needs tokens of dim 77 and the output is a tensor of shape [dim_batch, 77, 512]
+                # we need to cut the output features, the attention_mask and token_type_ids in order to have a dimensionality of max_seq_len tokens 
+                for i in range(len(examples_txts[0])): # iterating over all the element of the batch
+                    if examples_txts[1][i][self.max_seq_len] == 1:
+                        # if the attention_mask contains 1 in the first element that will be cutted
+                        # we substitute the element of the clip_features that will be the last with the feature
+                        # relative to the end token
+                        clip_features[i][self.max_seq_len - 1] = clip_features[i][np.count_nonzero(examples_txts[1][i]) - 1]
+                
+                #cutting of clip features, attention_mask and token_type_ids
+                clip_features = clip_features[:,:self.max_seq_len,:]
+                examples_txts[1] = examples_txts[1][:,:self.max_seq_len]
+                examples_txts[2] = examples_txts[2][:,:self.max_seq_len]
+                    
                 inputs_txts = {
                     'input_clip': clip_features,
                     'attention_mask': examples_txts[1],
@@ -171,13 +186,15 @@ class JointTextImageTransformerEncoder(nn.Module):
             cap_len = examples_txts[4]
             feat_len = examples_imgs[5]
 
-            max_language_token_len = inputs_txts['input_ids'].shape[1]
+            text_input_type = 'input_clip' if self.clip_enabled else 'input_ids'
+            
+            max_language_token_len = inputs_txts[text_input_type].shape[1] 
             max_cap_len = max(cap_len)
             max_img_len = max(feat_len)
 
             # masks
             txt_mask = torch.zeros(bs, max(cap_len)).bool()
-            txt_mask = txt_mask.to(inputs_txts['input_ids'].device)
+            txt_mask = txt_mask.to(inputs_txts[text_input_type].device)
             for m, c_len in zip(txt_mask, cap_len):
                 m[c_len:] = True
 
