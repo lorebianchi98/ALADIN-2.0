@@ -263,11 +263,12 @@ class BertEmbeddings(nn.Module):
         seq_length = input_ids.size(1)
         if position_ids is None:
             position_ids = torch.arange(seq_length, dtype=torch.long, device=input_ids.device)
-            position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
+            position_ids = position_ids.unsqueeze(0).expand_as(input_ids) if not is_clip else position_ids.unsqueeze(0).expand(input_ids.shape[:2])
         if token_type_ids is None:
             token_type_ids = torch.zeros_like(input_ids) if not is_clip else torch.zeros_like(input_ids[..., 0])
 
         if is_clip:
+            input_ids = input_ids.to(torch.float32)
             words_embeddings = self.clip_to_oscar_embeddings(input_ids)
         else:
             words_embeddings = self.word_embeddings(input_ids)

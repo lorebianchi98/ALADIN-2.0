@@ -181,6 +181,7 @@ def main():
     
     config['detection_type'] = args.detection_type
     config['enable_clip'] = args.enable_clip
+    config['max_seq_len'] = args.max_seq_length
     # Warn: these flags are misleading: they switch Oscar in the right configuration for the Alad setup (see dataset.py)
     args.do_test = True
     args.do_eval = True

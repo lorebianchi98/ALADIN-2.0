@@ -196,7 +196,7 @@ class BertImgModel(BertPreTrainedModel):
         for layer, heads in heads_to_prune.items():
             self.encoder.layer[layer].attention.prune_heads(heads)
 
-    def forward(self, input_ids, input_clip=None, token_type_ids=None, attention_mask=None,
+    def forward(self, input_ids=None, input_clip=None, token_type_ids=None, attention_mask=None,
             position_ids=None, head_mask=None, img_feats=None,
             encoder_history_states=None):
         if attention_mask is None:

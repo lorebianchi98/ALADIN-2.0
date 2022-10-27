@@ -373,7 +373,7 @@ class RetrievalDataset(Dataset):
                 text_a = ' '.join(text_a.split(' ')[:self.max_seq_len - 2]) # adjusting text number of words
                 input_ids = clip.tokenize([text_a], context_length=100).to(self.device)[0].tolist()
                 end_token = 49407 
-                input_ids = input_ids[:clip_tokens_len - 1] + [end_token] # if too much tokens are generated we cut it
+                input_ids = input_ids[:clip_tokens_len - 1] + [end_token] if input_ids[clip_tokens_len - 1] != 0 else input_ids[:clip_tokens_len]# if too much tokens are generated we cut it
                 seq_len = np.count_nonzero(input_ids)
                 seq_padding_len = len(input_ids) - seq_len
                 segment_ids = [cls_token_segment_id] + [sequence_a_segment_id] * (seq_len - 1)

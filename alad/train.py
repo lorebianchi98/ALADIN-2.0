@@ -211,6 +211,7 @@ def main():
 
     config['detection_type'] = args.detection_type
     config['enable_clip'] = args.enable_clip
+    config['max_seq_len'] = args.max_seq_length
     args = restore_training_settings(args)
 
     oscar_checkpoint = args.eval_model_dir

@@ -36,6 +36,8 @@ class JointTextImageTransformerEncoder(nn.Module):
     def __init__(self, config, oscar_checkpoint):
         super().__init__()
 
+        self.max_seq_len = config['max_seq_len']
+        
         # Init CLIP
         self.clip_enabled = config['enable_clip']
         if self.clip_enabled:
