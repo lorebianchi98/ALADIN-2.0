@@ -385,7 +385,10 @@ class RetrievalDataset(Dataset):
                 seq_len = len(input_ids)
                 seq_padding_len = self.max_seq_len - seq_len
                 segment_ids = [cls_token_segment_id] + [sequence_b_segment_id] * (seq_len - 1)
-                segment_ids += [pad_token_segment_id] * seq_padding_len
+                if seq_padding_len > 0:
+                    segment_ids += [pad_token_segment_id] * seq_padding_len
+                    pad = [0] * clip_tokens_len
+                    input_ids += [pad] * seq_padding_len
         
         #adjusting outputs if clip was not used
         if (not self.clip_enabled_captions and text_a is not None) or (not self.clip_enabled_labels and text_b is not None):

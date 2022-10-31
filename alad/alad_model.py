@@ -139,7 +139,7 @@ class JointTextImageTransformerEncoder(nn.Module):
 
     def forward(self, examples_imgs, examples_txts):
         grad_enabled = not self.freeze_teran
-        with torch.set_grad_enabled(grad_enabled):
+        with torch.no_grad():
             if not self.clip_enabled_captions:
                 # process captions by using oscar
                 inputs_txts = {
@@ -170,10 +170,11 @@ class JointTextImageTransformerEncoder(nn.Module):
                     'token_type_ids': examples_txts[2],
                     'img_feats': None
                 }
-                del clip_features # free memory
-                gc.collect()
+                
+                
+        with torch.set_grad_enabled(grad_enabled):
             txt_bert_output = self.oscar_model.bert(**inputs_txts)
-
+        with torch.no_grad():
             if  not self.clip_enabled_labels:
                 # process image regions and captions using oscar
                 inputs_imgs = {
@@ -184,13 +185,14 @@ class JointTextImageTransformerEncoder(nn.Module):
                 }
             else:
                 # process image regions with oscar and captions with CLIP features
-                clip_features = [self.clip_model.encode_text(x)[0] for x in examples_imgs[0]]
+                clip_features = torch.stack([self.clip_model.encode_text(x)[0] for x in examples_imgs[0]])
                 inputs_imgs = {
                     'input_clip': clip_features,
                     'attention_mask': examples_imgs[1],
                     'token_type_ids': examples_imgs[2],
                     'img_feats': examples_imgs[3],
                 }
+        with torch.set_grad_enabled(grad_enabled):
             img_bert_output = self.oscar_model.bert(**inputs_imgs)
             # i_emb = i_emb.permute(1, 0, 2)
 
