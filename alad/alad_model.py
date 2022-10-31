@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 
+import os, gc
+
 from CLIP import clip
 
 import numpy as np
@@ -16,7 +18,6 @@ from transformers.pytorch_transformers import BertTokenizer, BertConfig
 from .utils import l2norm, Aggregator, DepthAggregatorModel, FeatureFusionModel
 
 # from nltk.corpus import stopwords, words as nltk_words
-
 
 def pairwise_NNs_inner(x):
     """
@@ -41,8 +42,9 @@ class JointTextImageTransformerEncoder(nn.Module):
         self.max_seq_len = config['max_seq_len']
         
         # Init CLIP
-        self.clip_enabled = config['enable_clip']
-        if self.clip_enabled:
+        self.clip_enabled_captions = config['enable_clip_captions']
+        self.clip_enabled_labels = config['enable_clip_labels']
+        if self.clip_enabled_captions or self.clip_enabled_labels:
             self.device = 'cuda' if torch.cuda.is_available() else "cpu"
             self.clip_model, self.clip_preprocess = clip.load("ViT-B/32", device=self.device)
 
@@ -137,9 +139,8 @@ class JointTextImageTransformerEncoder(nn.Module):
 
     def forward(self, examples_imgs, examples_txts):
         grad_enabled = not self.freeze_teran
-        
         with torch.set_grad_enabled(grad_enabled):
-            if not self.clip_enabled:
+            if not self.clip_enabled_captions:
                 # process captions by using oscar
                 inputs_txts = {
                     'input_ids': examples_txts[0],
@@ -156,7 +157,7 @@ class JointTextImageTransformerEncoder(nn.Module):
                         # if the attention_mask contains 1 in the first element that will be cutted
                         # we substitute the element of the clip_features that will be the last with the feature
                         # relative to the end token
-                        clip_features[i][self.max_seq_len - 1] = clip_features[i][np.count_nonzero(examples_txts[1][i]) - 1]
+                        clip_features[i][self.max_seq_len - 1] = clip_features[i][np.count_nonzero(examples_txts[1][i].cpu().numpy()) - 1]
                 
                 #cutting of clip features, attention_mask and token_type_ids
                 clip_features = clip_features[:,:self.max_seq_len,:]
@@ -169,15 +170,27 @@ class JointTextImageTransformerEncoder(nn.Module):
                     'token_type_ids': examples_txts[2],
                     'img_feats': None
                 }
+                del clip_features # free memory
+                gc.collect()
             txt_bert_output = self.oscar_model.bert(**inputs_txts)
 
-            # process image regions using oscar
-            inputs_imgs = {
-                'input_ids': examples_imgs[0],
-                'attention_mask': examples_imgs[1],
-                'token_type_ids': examples_imgs[2],
-                'img_feats': examples_imgs[3],
-            }
+            if  not self.clip_enabled_labels:
+                # process image regions and captions using oscar
+                inputs_imgs = {
+                    'input_ids': examples_imgs[0],
+                    'attention_mask': examples_imgs[1],
+                    'token_type_ids': examples_imgs[2],
+                    'img_feats': examples_imgs[3],
+                }
+            else:
+                # process image regions with oscar and captions with CLIP features
+                clip_features = [self.clip_model.encode_text(x)[0] for x in examples_imgs[0]]
+                inputs_imgs = {
+                    'input_clip': clip_features,
+                    'attention_mask': examples_imgs[1],
+                    'token_type_ids': examples_imgs[2],
+                    'img_feats': examples_imgs[3],
+                }
             img_bert_output = self.oscar_model.bert(**inputs_imgs)
             # i_emb = i_emb.permute(1, 0, 2)
 
@@ -186,7 +199,7 @@ class JointTextImageTransformerEncoder(nn.Module):
             cap_len = examples_txts[4]
             feat_len = examples_imgs[5]
 
-            text_input_type = 'input_clip' if self.clip_enabled else 'input_ids'
+            text_input_type = 'input_clip' if self.clip_enabled_captions else 'input_ids'
             
             max_language_token_len = inputs_txts[text_input_type].shape[1] 
             max_cap_len = max(cap_len)

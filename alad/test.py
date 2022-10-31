@@ -132,7 +132,8 @@ def main():
     parser.add_argument('--detection_type', type=str, default='det', help='Select the box detection to retrieve between [det, det+fast]'
                                                                            'det: Use only the detections from Detic'
                                                                            'det+fast: Use both the detections from Detic and Faster')
-    parser.add_argument("--enable_clip", action='store_true', help="Whether to use clip features for encoding texts.")
+    parser.add_argument("--enable_clip_captions", action='store_true', help="Whether to use clip features for encoding captions.")
+    parser.add_argument("--enable_clip_labels", action='store_true', help="Whether to use clip features for encoding labels.")
     # -----------------------------------------------------------------------------------------
     # TERAN Arguments
     # -----------------------------------------------------------------------------------------
@@ -180,7 +181,8 @@ def main():
     args.per_gpu_eval_batch_size = config['training']['bs']
     
     config['detection_type'] = args.detection_type
-    config['enable_clip'] = args.enable_clip
+    config['enable_clip_captions'] = args.enable_clip_captions
+    config['enable_clip_labels'] = args.enable_clip_labels
     config['max_seq_len'] = args.max_seq_length
     # Warn: these flags are misleading: they switch Oscar in the right configuration for the Alad setup (see dataset.py)
     args.do_test = True

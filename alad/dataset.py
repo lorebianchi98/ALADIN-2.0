@@ -43,7 +43,10 @@ class RetrievalDataset(Dataset):
         logger = setup_logger(f"dataset_{split}", None, 0)
 
         self.detection_type = args.detection_type
-        self.clip_enabled = args.enable_clip
+        
+        self.clip_enabled_captions = args.enable_clip_captions
+        self.clip_enabled_labels = args.enable_clip_labels
+        
         self.device = 'cuda' if torch.cuda.is_available() else "cpu"
         
         self.img_file = args.img_feat_file
@@ -343,10 +346,10 @@ class RetrievalDataset(Dataset):
                           cls_token_segment_id=0, pad_token_segment_id=0,
                           sequence_a_segment_id=0, sequence_b_segment_id=1, return_lengths=False):
         assert (text_a is None and img_feat is not None and text_b is not None) or (text_a is not None and img_feat is None and text_b is None)
-        
-        if not self.clip_enabled:
-            if text_a is not None:
-                
+        clip_tokens_len = 77
+        if text_a is not None:
+            #tokenization of caption without CLIP
+            if not self.clip_enabled_captions:
                 tokens_a = self.tokenizer.tokenize(text_a)
                 if len(tokens_a) > self.args.max_seq_length - 2:
                     tokens_a = tokens_a[:(self.args.max_seq_length - 2)]
@@ -354,22 +357,8 @@ class RetrievalDataset(Dataset):
                 tokens = [self.tokenizer.cls_token] + tokens_a + [self.tokenizer.sep_token]
                 segment_ids = [cls_token_segment_id] + [sequence_a_segment_id] * (len(tokens_a) + 1)
                 seq_len = len(tokens)
-            if text_b is not None:
-                tokens_b = self.tokenizer.tokenize(text_b)
-                if len(tokens_b) > self.max_seq_len - 2:
-                    tokens_b = tokens_b[: (self.max_seq_len - 2)]
-                tokens = [cls_token_segment_id] + tokens_b + [self.tokenizer.sep_token]
-                segment_ids = [cls_token_segment_id] + [sequence_b_segment_id] * (len(tokens_b) + 1)
-                seq_len = len(tokens)
-
-            seq_padding_len = self.max_seq_len - seq_len
-            tokens += [self.tokenizer.pad_token] * seq_padding_len
-            segment_ids += [pad_token_segment_id] * seq_padding_len
-            input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-        # if CLIP is enabled we tokenize with CLIP
-        else:
-            clip_tokens_len = 77
-            if text_a is not None:
+            #tokenization of caption with CLIP
+            else:
                 text_a = ' '.join(text_a.split(' ')[:self.max_seq_len - 2]) # adjusting text number of words
                 input_ids = clip.tokenize([text_a], context_length=100).to(self.device)[0].tolist()
                 end_token = 49407 
@@ -378,16 +367,32 @@ class RetrievalDataset(Dataset):
                 seq_padding_len = len(input_ids) - seq_len
                 segment_ids = [cls_token_segment_id] + [sequence_a_segment_id] * (seq_len - 1)
                 segment_ids += [pad_token_segment_id] * seq_padding_len
-            if text_b is not None:
-                text_b = ' '.join(text_b.split(' ')[:self.max_seq_len - 2]) # adjusting text number of words
-                input_ids = clip.tokenize([text_b], context_length=100).to(self.device)[0].tolist()
-                end_token = 49407 
-                input_ids = input_ids[:clip_tokens_len - 1] + [end_token] # if too much tokens are generated we cut it
-                seq_len = np.count_nonzero(input_ids)
-                seq_padding_len = len(input_ids) - seq_len
+                
+        if text_b is not None:
+            #tokenization of labels without CLIP
+            if not self.clip_enabled_labels:
+                tokens_b = self.tokenizer.tokenize(text_b)
+                if len(tokens_b) > self.max_seq_len - 2:
+                    tokens_b = tokens_b[: (self.max_seq_len - 2)]
+                tokens = [cls_token_segment_id] + tokens_b + [self.tokenizer.sep_token]
+                segment_ids = [cls_token_segment_id] + [sequence_b_segment_id] * (len(tokens_b) + 1)
+                seq_len = len(tokens)
+            else:
+                #tokenization of labels with CLIP
+                prompt = 'a photo of a ' # start of the sentence generated for each label
+                input_tokenizer = [prompt + x for x in text_b.split(' ')[:self.max_seq_len]] # generates list with a sentence for each label
+                input_ids = clip.tokenize(input_tokenizer).to(self.device).tolist() # returns tensor of dimension [n_labels, 77]
+                seq_len = len(input_ids)
+                seq_padding_len = self.max_seq_len - seq_len
                 segment_ids = [cls_token_segment_id] + [sequence_b_segment_id] * (seq_len - 1)
                 segment_ids += [pad_token_segment_id] * seq_padding_len
-                
+        
+        #adjusting outputs if clip was not used
+        if (not self.clip_enabled_captions and text_a is not None) or (not self.clip_enabled_labels and text_b is not None):
+            seq_padding_len = self.max_seq_len - seq_len
+            tokens += [self.tokenizer.pad_token] * seq_padding_len
+            segment_ids += [pad_token_segment_id] * seq_padding_len
+            input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
             
         if img_feat is not None:
             # image features
