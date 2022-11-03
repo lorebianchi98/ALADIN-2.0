@@ -7,3 +7,4 @@ anytree
 regex
 boto3
 tensorboard
+ftfy

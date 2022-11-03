@@ -180,6 +180,8 @@ class BertImgModel(BertPreTrainedModel):
             if self.use_img_layernorm:
                 self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.img_layer_norm_eps)
 
+        self.detic_to_oscar_img = nn.Linear(self.img_dim, config.hidden_size)
+
         self.apply(self.init_weights)
 
     def _resize_token_embeddings(self, new_num_tokens):
@@ -196,9 +198,12 @@ class BertImgModel(BertPreTrainedModel):
         for layer, heads in heads_to_prune.items():
             self.encoder.layer[layer].attention.prune_heads(heads)
 
-    def forward(self, input_ids=None, input_clip=None, token_type_ids=None, attention_mask=None,
+    def forward(self, input_ids=None, input_clip=None, clip_type=None, token_type_ids=None, attention_mask=None,
             position_ids=None, head_mask=None, img_feats=None,
             encoder_history_states=None):
+
+        assert not (input_clip is not None and clip_type is None), "You should set also clip_type to be either global or local"
+
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids) if input_clip is None else torch.ones_like(input_clip[..., 0])
 
@@ -243,7 +248,7 @@ class BertImgModel(BertPreTrainedModel):
 
         textual_inputs = input_clip if input_clip is not None else input_ids
         embedding_output = self.embeddings(textual_inputs, position_ids=position_ids,
-                token_type_ids=token_type_ids)
+                token_type_ids=token_type_ids, clip_type=clip_type)
         if encoder_history_states:
             assert img_feats is None, "Cannot take image features while using encoder history states"
 
@@ -260,6 +265,17 @@ class BertImgModel(BertPreTrainedModel):
                 img_embedding_output = self.img_embedding(code_emb)
             else:
                 img_embedding_output = self.img_embedding(img_feats)
+                if self.img_dim != 1030:
+                    # only if we are not only using detic alone
+
+                    # find detic features
+                    detic_mask = (img_feats[:, :, 1030:] == 0).all(dim=2)
+                    # faster_mask = ~detic_mask
+                    img_feats_detic = self.detic_to_oscar_img(img_feats)
+
+                    # put back the detic features overwriting the corresponding entries in the img_embedding_output tensor
+                    img_embedding_output[detic_mask] = img_feats_detic
+
                 if self.use_img_layernorm:
                     img_embedding_output = self.LayerNorm(img_embedding_output)
 

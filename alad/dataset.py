@@ -47,8 +47,6 @@ class RetrievalDataset(Dataset):
         self.clip_enabled_captions = args.enable_clip_captions
         self.clip_enabled_labels = args.enable_clip_labels
         
-        self.device = 'cuda' if torch.cuda.is_available() else "cpu"
-        
         self.img_file = args.img_feat_file
         label_data_dir = op.dirname(self.img_file)
         self.img_tsv = TSVFile(os.path.join(label_data_dir, "features.tsv")) if self.detection_type == 'det+fast' else None
@@ -360,7 +358,7 @@ class RetrievalDataset(Dataset):
             #tokenization of caption with CLIP
             else:
                 text_a = ' '.join(text_a.split(' ')[:self.max_seq_len - 2]) # adjusting text number of words
-                input_ids = clip.tokenize([text_a], context_length=100).to(self.device)[0].tolist()
+                input_ids = clip.tokenize([text_a], context_length=100)[0].tolist()
                 end_token = 49407 
                 input_ids = input_ids[:clip_tokens_len - 1] + [end_token] if input_ids[clip_tokens_len - 1] != 0 else input_ids[:clip_tokens_len]# if too much tokens are generated we cut it
                 seq_len = np.count_nonzero(input_ids)
@@ -380,8 +378,8 @@ class RetrievalDataset(Dataset):
             else:
                 #tokenization of labels with CLIP
                 prompt = 'a photo of a ' # start of the sentence generated for each label
-                input_tokenizer = [prompt + x for x in text_b.split(' ')[:self.max_seq_len]] # generates list with a sentence for each label
-                input_ids = clip.tokenize(input_tokenizer).to(self.device).tolist() # returns tensor of dimension [n_labels, 77]
+                input_tokenizer = [prompt + x.replace('_', ' ').replace('(', '').replace(')', '') for x in text_b.split(' ')[:self.max_seq_len]] # generates list with a sentence for each label
+                input_ids = clip.tokenize(input_tokenizer).tolist() # returns tensor of dimension [n_labels, 77]
                 seq_len = len(input_ids)
                 seq_padding_len = self.max_seq_len - seq_len
                 segment_ids = [cls_token_segment_id] + [sequence_b_segment_id] * (seq_len - 1)

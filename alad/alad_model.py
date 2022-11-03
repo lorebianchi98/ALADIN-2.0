@@ -166,6 +166,7 @@ class JointTextImageTransformerEncoder(nn.Module):
                     
                 inputs_txts = {
                     'input_clip': clip_features,
+                    'clip_type': 'local',
                     'attention_mask': examples_txts[1],
                     'token_type_ids': examples_txts[2],
                     'img_feats': None
@@ -188,6 +189,7 @@ class JointTextImageTransformerEncoder(nn.Module):
                 clip_features = torch.stack([self.clip_model.encode_text(x)[0] for x in examples_imgs[0]])
                 inputs_imgs = {
                     'input_clip': clip_features,
+                    'clip_type': 'global',
                     'attention_mask': examples_imgs[1],
                     'token_type_ids': examples_imgs[2],
                     'img_feats': examples_imgs[3],
