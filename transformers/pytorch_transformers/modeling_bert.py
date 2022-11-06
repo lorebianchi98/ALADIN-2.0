@@ -244,8 +244,16 @@ class BertEmbeddings(nn.Module):
     """
     def __init__(self, config):
         super(BertEmbeddings, self).__init__()
-        self.clip_local_to_oscar_embeddings = nn.Linear(512, config.hidden_size)
-        self.clip_global_to_oscar_embeddings = nn.Linear(512, config.hidden_size)
+        self.clip_local_to_oscar_embeddings = nn.Sequential(
+            nn.Linear(512, config.hidden_size),
+            nn.ReLU(),
+            nn.Linear(config.hidden_size, config.hidden_size)
+        )
+        self.clip_global_to_oscar_embeddings = nn.Sequential(
+            nn.Linear(512, config.hidden_size),
+            nn.ReLU(),
+            nn.Linear(config.hidden_size, config.hidden_size)
+        )
             
         self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=0)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
