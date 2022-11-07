@@ -180,7 +180,11 @@ class BertImgModel(BertPreTrainedModel):
             if self.use_img_layernorm:
                 self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.img_layer_norm_eps)
 
-        self.detic_to_oscar_img = nn.Linear(self.img_dim, config.hidden_size)
+        self.detic_to_oscar_img = nn.Sequential(
+            nn.Linear(self.img_dim, config.hidden_size),
+            nn.ReLU(),
+            nn.Linear(config.hidden_size, config.hidden_size)
+        )
 
         self.apply(self.init_weights)
 
@@ -270,11 +274,12 @@ class BertImgModel(BertPreTrainedModel):
 
                     # find detic features
                     detic_mask = (img_feats[:, :, 1030:] == 0).all(dim=2)
+                    # detic_mask = detic_mask.unsqueeze(2).expand(-1, -1, self.img_dim)
                     # faster_mask = ~detic_mask
                     img_feats_detic = self.detic_to_oscar_img(img_feats)
 
                     # put back the detic features overwriting the corresponding entries in the img_embedding_output tensor
-                    img_embedding_output[detic_mask] = img_feats_detic
+                    img_embedding_output[detic_mask] = img_feats_detic[detic_mask]
 
                 if self.use_img_layernorm:
                     img_embedding_output = self.LayerNorm(img_embedding_output)

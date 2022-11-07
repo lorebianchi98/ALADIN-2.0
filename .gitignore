@@ -124,6 +124,7 @@ proc_data
 
 # examples
 runs
+testrun
 examples/runs
 
 # pyCharm

@@ -495,11 +495,14 @@ class RetrievalDataset(Dataset):
         # concatenate positional information to the image feature (so that they become 1024 + 6 = 1030-dimensional)
         w = img_data["image_w"]
         h = img_data["image_h"]
-        rect = np.asarray([obj["rect"] for obj in objects], dtype='float32')
-        mask = np.array([w, h, w, h], dtype=np.float32)
-        rect = np.clip(rect / mask, 0, 1)
-        pos_feat = np.concatenate((rect, rect[:, [3]]-rect[:, [1]], rect[:, [2]]-rect[:, [0]]), axis=1).astype(np.float32)
-        features_det = np.hstack((features_det, pos_feat))
+        if len(objects) > 0:
+            rect = np.asarray([obj["rect"] for obj in objects], dtype='float32')
+            mask = np.array([w, h, w, h], dtype=np.float32)
+            rect = np.clip(rect / mask, 0, 1)
+            pos_feat = np.concatenate((rect, rect[:, [3]]-rect[:, [1]], rect[:, [2]]-rect[:, [0]]), axis=1).astype(np.float32)
+            features_det = np.hstack((features_det, pos_feat))
+        else:
+            features_det = None
         features = features_det
         
         # in case the detection_type is setted on det+fast we also retrieve Faster features
@@ -510,12 +513,14 @@ class RetrievalDataset(Dataset):
             features_fast = np.frombuffer(base64.b64decode(row[-1]),
                                     dtype=np.float32).reshape((num_boxes, -1))
             
-            #add padding to Detic features
-            len_diff = features_fast.shape[1] - features_det.shape[1]
-            pad = np.zeros((len(features_det), len_diff), dtype=np.float32)
-            features_det = np.hstack((features_det, pad))
-            
-            features_tmp = np.append(features_det, features_fast, axis=0)
+            if features_det is not None:
+                #add padding to Detic features
+                len_diff = features_fast.shape[1] - features_det.shape[1]
+                pad = np.zeros((len(features_det), len_diff), dtype=np.float32)
+                features_det = np.hstack((features_det, pad))
+                features_tmp = np.append(features_det, features_fast, axis=0)
+            else:
+                features_tmp = features_fast
             #keeping only the relevant boxes using the normalized score order
             features = [features_tmp[id] for id in self.box_ordering[image_id]] 
             features = np.array(features,dtype=np.float32)
@@ -731,7 +736,7 @@ def main():
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup.")
     parser.add_argument("--scheduler", default='linear', type=str, help="constant or linear.")
-    parser.add_argument("--num_workers", default=4, type=int, help="Workers in dataloader.")
+    parser.add_argument("--num_workers", default=0, type=int, help="Workers in dataloader.")
     parser.add_argument("--num_train_epochs", default=20, type=int,
                         help="Total number of training epochs to perform.")
     parser.add_argument("--max_steps", default=-1, type=int,
@@ -745,10 +750,19 @@ def main():
                         help="Model directory for evaluation.")
     parser.add_argument("--no_cuda", action='store_true', help="Avoid using CUDA.")
     parser.add_argument('--seed', type=int, default=88, help="random seed for initialization.")
+    parser.add_argument('--detection_type', type=str, default='det', help='Select the box detection to retrieve between [det, det+fast]'
+                                                                           'det: Use only the detections from Detic'
+                                                                           'det+fast: Use both the detections from Detic and Faster')
+    parser.add_argument("--enable_clip_captions", action='store_true', help="Whether to use clip features for encoding captions.")
+    parser.add_argument("--enable_clip_labels", action='store_true', help="Whether to use clip features for encoding labels.")    
+
     args = parser.parse_args()
 
     global logger
     logger = setup_logger("vlpretrain", None, 0)
+
+    args.do_test = True
+    args.do_eval = True
 
     args.device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
     args.n_gpu = torch.cuda.device_count()
@@ -808,7 +822,7 @@ def main():
         dataloader = DataLoader(dataset, shuffle=False,
                                      batch_size=bs, num_workers=args.num_workers, collate_fn=collate)
         for b in tqdm(dataloader):
-            a = 1
+           a = 1
 
         # pred_file = get_predict_file(args)
         # if False:  # op.isfile(pred_file):
