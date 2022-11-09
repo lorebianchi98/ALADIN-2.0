@@ -182,7 +182,7 @@ class RetrievalDataset(Dataset):
                                 if id in box_to_keep:
                                     total_confs_filtered.append(x)    
                             
-                            box_to_keep = [x for _, x in sorted(zip(total_confs_filtered, box_to_keep), reverse=True)] # ordering the boxes in order of normalized confidence 
+                            box_to_keep = [x.item() for _, x in sorted(zip(total_confs_filtered, box_to_keep), reverse=True)] # ordering the boxes in order of normalized confidence 
                             
                             self.box_ordering[int(image_id)] = box_to_keep # saving the order of the boxes in order to order the features in the get_image
                             
