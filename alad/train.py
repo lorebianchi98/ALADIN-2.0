@@ -129,11 +129,11 @@ def main():
                         help="Model directory for evaluation.")
     parser.add_argument("--no_cuda", action='store_true', help="Avoid using CUDA.")
     parser.add_argument('--seed', type=int, default=88, help="random seed for initialization.")
-    parser.add_argument('--detection_type', type=str, default='det', help='Select the box detection to retrieve between [det, det+fast]'
-                                                                           'det: Use only the detections from Detic'
-                                                                           'det+fast: Use both the detections from Detic and Faster')
-    parser.add_argument("--enable_clip_captions", action='store_true', help="Whether to use clip features for encoding captions.")
-    parser.add_argument("--enable_clip_labels", action='store_true', help="Whether to use clip features for encoding labels.")    
+    # parser.add_argument('--detection_type', type=str, default='det', help='Select the box detection to retrieve between [det, det+fast]'
+    #                                                                        'det: Use only the detections from Detic'
+    #                                                                        'det+fast: Use both the detections from Detic and Faster')
+    # parser.add_argument("--enable_clip_captions", action='store_true', help="Whether to use clip features for encoding captions.")
+    # parser.add_argument("--enable_clip_labels", action='store_true', help="Whether to use clip features for encoding labels.")    
     # -----------------------------------------------------------------------------------------
     # TERAN Arguments
     # -----------------------------------------------------------------------------------------
@@ -177,9 +177,9 @@ def main():
     #     torch.cuda.set_limit_lms(11000 * 1024 * 1024)
     #     print('[LMS=On limit=' + str(torch.cuda.get_limit_lms()) + ']')
 
-    #check if the type od detection_type is valid
-    if args.detection_type != 'det' and args.detection_type != 'det+fast':
-         raise ValueError("detection_type should assume \'det\' or \'det+fast\' values")
+    # #check if the type od detection_type is valid
+    # if args.detection_type != 'det' and args.detection_type != 'det+fast':
+    #      raise ValueError("detection_type should assume \'det\' or \'det+fast\' values")
 
     with open(args.config, 'r') as ymlfile:
         config = yaml.load(ymlfile)
@@ -210,9 +210,9 @@ def main():
     # Data initialization (data pipeline is from Oscar)
     # ------------------------------------------------------------------------------------------------------------------
 
-    config['detection_type'] = args.detection_type
-    config['enable_clip_captions'] = args.enable_clip_captions
-    config['enable_clip_labels'] = args.enable_clip_labels
+    config['detection_type'] = args.detection_type = config['detection_type'] if 'detection_type' in config.keys() else 'det'
+    config['enable_clip_captions'] = args.enable_clip_captions = config['enable_clip_captions'] if 'enable_captions' in config.keys() else False
+    config['enable_clip_labels'] = args.enable_clip_labels = config['enable_clip_labels'] if 'enable_labels' in config.keys() else False
     config['max_seq_len'] = args.max_seq_length
     args = restore_training_settings(args)
 
