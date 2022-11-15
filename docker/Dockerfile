@@ -21,9 +21,9 @@ RUN rm -rf azcopy_linux_amd64_*
 
 #download models, features, dataset and checkpoints for ALADIN
 RUN mkdir models
-RUN azcopy copy 'https://biglmdiag.blob.core.windows.net/vinvl/image_features/coco_X152C4_frcnnbig2_exp168model_0060000model.roi_heads.nm_filter_2_model.roi_heads.score_thresh_0.2/model_0060000/' ./features --recursive
-RUN azcopy copy 'https://biglmdiag.blob.core.windows.net/vinvl/model_ckpts/coco_ir/base/checkpoint-0132780/' ./checkpoints --recursive
-RUN azcopy copy 'https://biglmdiag.blob.core.windows.net/vinvl/datasets/coco_ir' ./data --recursive
+#RUN azcopy copy 'https://biglmdiag.blob.core.windows.net/vinvl/image_features/coco_X152C4_frcnnbig2_exp168model_0060000model.roi_heads.nm_filter_2_model.roi_heads.score_thresh_0.2/model_0060000/' ./features --recursive
+#RUN azcopy copy 'https://biglmdiag.blob.core.windows.net/vinvl/model_ckpts/coco_ir/base/checkpoint-0132780/' ./checkpoints --recursive
+#RUN azcopy copy 'https://biglmdiag.blob.core.windows.net/vinvl/datasets/coco_ir' ./data --recursive
 RUN wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id=1PQvzOyuzDPgs9NO8rWkzzKFVE8ENnH93' -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=1PQvzOyuzDPgs9NO8rWkzzKFVE8ENnH93" -O ./models/best_model_align_and_distill.pth.tar && rm -rf /tmp/cookies.txt
 
 
@@ -46,12 +46,6 @@ RUN python setup.py build develop
 RUN pip install -r requirements.txt
 RUN pip install tensorboard
 WORKDIR /workspace
-
-#download models, features, dataset and checkpoints for ALADIN
-RUN azcopy copy 'https://biglmdiag.blob.core.windows.net/vinvl/model_ckpts/coco_ir/base/checkpoint-0132780/' ./checkpoints --recursive
-RUN azcopy copy 'https://biglmdiag.blob.core.windows.net/vinvl/datasets/coco_ir' ./data --recursive
-RUN azcopy copy 'https://biglmdiag.blob.core.windows.net/vinvl/image_features/coco_X152C4_frcnnbig2_exp168model_0060000model.roi_heads.nm_filter_2_model.roi_heads.score_thresh_0.2/model_0060000/' ./features --recursive
-RUN wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id=1PQvzOyuzDPgs9NO8rWkzzKFVE8ENnH93' -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=1PQvzOyuzDPgs9NO8rWkzzKFVE8ENnH93" -O ./models/best_model_align_and_distill.pth.tar && rm -rf /tmp/cookies.txt
 
 #installing detectron2
 #RUN python -m pip install 'git+https://github.com/facebookresearch/detectron2.git' --use-feature=2020-resolver
