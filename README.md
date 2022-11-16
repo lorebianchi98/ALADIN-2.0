@@ -19,11 +19,11 @@ Our code is based on OSCAR, whose repository is available [here](https://github.
 ### Setup with Conda
 ```bash
 # create a new environment
-conda create --name aladin-2.0 python=3.7
+conda create --name aladin-2.0 python=3.10 #3.7
 conda activate aladin-2.0
 
-# install pytorch1.2
-conda install pytorch==1.2.0 torchvision==0.4.0 cudatoolkit=10.0 -c pytorch
+# install pytorch1.7.0
+conda install pytorch==1.7.0 torchvision==0.8.0 cudatoolkit=11.0 -c pytorch
 
 export INSTALL_DIR=$PWD
 
