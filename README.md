@@ -19,8 +19,8 @@ Our code is based on OSCAR, whose repository is available [here](https://github.
 ### Setup with Conda
 ```bash
 # create a new environment
-conda create --name oscar python=3.7
-conda activate oscar
+conda create --name aladin-2.0 python=3.7
+conda activate aladin-2.0
 
 # install pytorch1.2
 conda install pytorch==1.2.0 torchvision==0.4.0 cudatoolkit=10.0 -c pytorch
@@ -36,8 +36,8 @@ python setup.py install --cuda_ext --cpp_ext
 
 # install this repo
 cd $INSTALL_DIR
-git clone --recursive https://github.com/mesnico/OSCAR-TERAN-distillation
-cd OSCAR-TERAN-distillation/coco_caption
+git clone --recursive https://github.com/lorebianchi98/ALADIN-2.0.git
+cd ALADIN-2.0/coco_caption
 ./get_stanford_models.sh
 cd ..
 python setup.py build develop
