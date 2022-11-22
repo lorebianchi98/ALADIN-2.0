@@ -32,7 +32,7 @@ cd $INSTALL_DIR
 git clone https://github.com/NVIDIA/apex.git 
 cd apex
 git checkout f3a960f80244cf9e80558ab30f7f7e8cbf03c0a0 
-python setup.py install --cuda_ext --cpp_ext #comment line 106 of setup.py if it gives error
+python setup.py install --cuda_ext --cpp_ext 
 
 # install this repo
 cd $INSTALL_DIR
