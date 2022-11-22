@@ -68,7 +68,8 @@ class RetrievalDataset(Dataset):
         if args.add_od_labels:
             #retrieves the detections of Detic from the shelve
             label_data_dir = op.dirname(self.img_file)
-            label_detic_pkl_path = os.path.join(label_data_dir, f"detic_labels_{split}.pkl")
+            #label_detic_pkl_path = os.path.join(label_data_dir, f"detic_labels_{split}.pkl")
+            label_detic_pkl_path = f"detic_labels_{split}.pkl"
             # get the labels of Detic from pickle file if exists for this split 
             if (os.path.exists(label_detic_pkl_path)):
                 with open(label_detic_pkl_path, 'rb') as fid:
