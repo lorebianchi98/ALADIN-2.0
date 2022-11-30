@@ -19,7 +19,7 @@ Our code is based on OSCAR, whose repository is available [here](https://github.
 ### Setup with Conda
 ```bash
 # create a new environment
-conda create --name aladin-2.0 python=3.10 #3.7
+conda create --name aladin-2.0 python=3.7
 conda activate aladin-2.0
 
 # install pytorch1.7.0
@@ -29,10 +29,10 @@ export INSTALL_DIR=$PWD
 
 # install apex
 cd $INSTALL_DIR
-git clone https://github.com/NVIDIA/apex.git
+git clone https://github.com/NVIDIA/apex.git 
 cd apex
-git checkout f3a960f80244cf9e80558ab30f7f7e8cbf03c0a0
-python setup.py install --cuda_ext --cpp_ext
+git checkout f3a960f80244cf9e80558ab30f7f7e8cbf03c0a0 
+python setup.py install --cuda_ext --cpp_ext 
 
 # install this repo
 cd $INSTALL_DIR
