@@ -362,7 +362,7 @@ class RetrievalDataset(Dataset):
                 input_ids = clip.tokenize([text_a], context_length=100)[0].tolist()
                 end_token = 49407 
                 input_ids = input_ids[:clip_tokens_len - 1] + [end_token] if input_ids[clip_tokens_len - 1] != 0 else input_ids[:clip_tokens_len]# if too much tokens are generated we cut it
-                seq_len = np.count_nonzero(input_ids)
+                seq_len = min(np.count_nonzero(input_ids), self.max_seq_len)
                 seq_padding_len = len(input_ids) - seq_len
                 segment_ids = [cls_token_segment_id] + [sequence_a_segment_id] * (seq_len - 1)
                 segment_ids += [pad_token_segment_id] * seq_padding_len
