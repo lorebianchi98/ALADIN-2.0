@@ -180,10 +180,16 @@ def main():
     args.per_gpu_train_batch_size = config['training']['bs']
     args.per_gpu_eval_batch_size = config['training']['bs']
     
+    
     config['detection_type'] = args.detection_type = config['detection_type'] if 'detection_type' in config.keys() else 'det'
-    config['enable_clip_captions'] = args.enable_clip_captions = config['enable_clip_captions'] if 'enable_captions' in config.keys() else False
-    config['enable_clip_labels'] = args.enable_clip_labels = config['enable_clip_labels'] if 'enable_labels' in config.keys() else False
+    config['enable_clip_captions'] = args.enable_clip_captions = config['enable_clip_captions'] if 'enable_clip_captions' in config.keys() else False
+    config['enable_clip_labels'] = args.enable_clip_labels = config['enable_clip_labels'] if 'enable_clip_labels' in config.keys() else False
     config['max_seq_len'] = args.max_seq_length
+    
+    print("Configuration detectors, label encoding and captions encoding:")
+    print("detection_type: %s, enable_clip_labels: %s, enable_clip_captions: %s" % (config['detection_type'], config['enable_clip_labels'], config['enable_clip_captions']))
+    
+    
     # Warn: these flags are misleading: they switch Oscar in the right configuration for the Alad setup (see dataset.py)
     args.do_test = True
     args.do_eval = True

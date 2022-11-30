@@ -163,7 +163,7 @@ class JointTextImageTransformerEncoder(nn.Module):
                 clip_features = clip_features[:,:self.max_seq_len,:]
                 examples_txts[1] = examples_txts[1][:,:self.max_seq_len]
                 examples_txts[2] = examples_txts[2][:,:self.max_seq_len]
-                    
+                #****************settare cap_len
                 inputs_txts = {
                     'input_clip': clip_features,
                     'clip_type': 'local',
@@ -177,7 +177,7 @@ class JointTextImageTransformerEncoder(nn.Module):
             txt_bert_output = self.oscar_model.bert(**inputs_txts)
         with torch.no_grad():
             if  not self.clip_enabled_labels:
-                # process image regions and captions using oscar
+                # process image regions and labels using oscar
                 inputs_imgs = {
                     'input_ids': examples_imgs[0],
                     'attention_mask': examples_imgs[1],
@@ -185,8 +185,16 @@ class JointTextImageTransformerEncoder(nn.Module):
                     'img_feats': examples_imgs[3],
                 }
             else:
-                # process image regions with oscar and captions with CLIP features
-                clip_features = torch.stack([self.clip_model.encode_text(x)[0] for x in examples_imgs[0]])
+                # process image regions with oscar and labels with CLIP features
+                
+                # unvectorized call to CLIP
+                # clip_features = torch.stack([self.clip_model.encode_text(x)[0] for x in examples_imgs[0]])
+                
+                # vectorizing tokens tensor in order to improve performance with only one CLIP call
+                size_0 = examples_imgs[0].shape[0]
+                size_1 = examples_imgs[0].shape[1]
+                flattened_tokens = torch.flatten(examples_imgs[0], 0, 1)
+                clip_features = torch.reshape(self.clip_model.encode_text(flattened_tokens)[0], [size_0, size_1, 512]) #extracting the clip_features with one vectorized call
                 inputs_imgs = {
                     'input_clip': clip_features,
                     'clip_type': 'global',
@@ -199,7 +207,7 @@ class JointTextImageTransformerEncoder(nn.Module):
             # i_emb = i_emb.permute(1, 0, 2)
 
             bs = inputs_imgs['img_feats'].shape[0]
-
+            
             cap_len = examples_txts[4]
             feat_len = examples_imgs[5]
 
@@ -214,7 +222,7 @@ class JointTextImageTransformerEncoder(nn.Module):
             txt_mask = txt_mask.to(inputs_txts[text_input_type].device)
             for m, c_len in zip(txt_mask, cap_len):
                 m[c_len:] = True
-
+            
             img_mask = torch.zeros(bs, max(feat_len)).bool()
             img_mask = img_mask.to(inputs_imgs['img_feats'].device)
             for m, v_len in zip(img_mask, feat_len):
