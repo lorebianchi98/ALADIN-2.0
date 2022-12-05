@@ -168,6 +168,9 @@ def main():
                         help='Reinitialize scheduler. To use with --resume')
     parser.add_argument('--config', type=str, help="Which configuration to use. See into 'config' folder")
 
+    parser.add_argument('--aggregation_type', type=str, default=None, help= "Which aggregation to use for boxes."
+                                                                            "Omit for no aggregation"
+                                                                            "labels: to just aggregate labels")
 
     args = parser.parse_args()
     print(args)

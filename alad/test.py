@@ -151,7 +151,9 @@ def main():
     # parser.add_argument('--use_restval', action='store_true',
     #                     help='Use the restval data for training on MSCOCO.')
     parser.add_argument('--config', type=str, help="Which configuration to use. See into 'config' folder")
-
+    parser.add_argument('--aggregation_type', type=str, default=None, help= "Which aggregation to use for boxes."
+                                                                            "Omit for no aggregation"
+                                                                            "labels: to just aggregate labels")
 
     args = parser.parse_args()
     print(args)
@@ -214,7 +216,6 @@ def main():
     # ------------------------------------------------------------------------------------------------------------------
 
     args = restore_training_settings(args)
-
     oscar_checkpoint = args.eval_model_dir
     assert op.isdir(oscar_checkpoint)
     logger.info("Evaluate the following checkpoint: %s", oscar_checkpoint)

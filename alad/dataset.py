@@ -13,6 +13,7 @@ from torch.utils.data import Dataset, DataLoader, RandomSampler, SequentialSampl
 from torchvision.ops import batched_nms
 from tqdm import tqdm
 import pickle
+import inflect
 
 from CLIP import clip
 
@@ -46,6 +47,10 @@ class RetrievalDataset(Dataset):
         
         self.clip_enabled_captions = args.enable_clip_captions
         self.clip_enabled_labels = args.enable_clip_labels
+        self.aggregation_type = args.aggregation_type if args.aggregation_type is not None else None
+        
+        self.list_labels = []
+        self.inflect = inflect.engine()
         
         self.img_file = args.img_feat_file
         label_data_dir = op.dirname(self.img_file)
@@ -378,8 +383,27 @@ class RetrievalDataset(Dataset):
                 seq_len = len(tokens)
             else:
                 #tokenization of labels with CLIP
-                prompt = 'a photo of a ' # start of the sentence generated for each label
-                input_tokenizer = [prompt + x.replace('_', ' ').replace('(', '').replace(')', '') for x in text_b.split(' ')[:self.max_seq_len]] # generates list with a sentence for each label
+                
+                #tokenization without aggregation
+                if self.aggregation_type is None:
+                    prompt = 'a photo of a ' # start of the sentence generated for each label
+                    labels = text_b.split(' ')
+                
+                #aggregation of the labels
+                if self.aggregation_type == 'labels':
+                    prompt = 'a photo of ' # start of the sentence generated for each label
+                    labels = text_b.split(' ')
+                    label_dict = {key: labels.count(key) for key in set(labels)} #create dictionary with label as key and occurences as value
+                    labels = []
+                    
+                    for key in label_dict.keys():
+                        if '(' not in key:
+                            labels.append(str(label_dict[key]) + " " + self.inflect.plural(key))
+                        else:
+                            labels.append(str(label_dict[key]) + " " + self.inflect.plural(key.split('_')[0]) + '_' + '_'.join(key.split('_')[1:]))
+                
+
+                input_tokenizer = [prompt + x.replace('_', ' ').replace('(', '').replace(')', '') for x in labels[:self.max_seq_len]] # generates list with a sentence for each label
                 input_ids = clip.tokenize(input_tokenizer).tolist() # returns tensor of dimension [n_labels, 77]
                 seq_len = len(input_ids)
                 seq_padding_len = self.max_seq_len - seq_len
