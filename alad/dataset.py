@@ -31,7 +31,7 @@ class RetrievalDataset(Dataset):
     def __init__(self, tokenizer, args, split='train', is_train=True):
         """
         tokenizer: tokenizer to process caption text.
-        args: configureation parameters including max_seq_length, etc.
+        args: configureation parameters including max_caption_seq_len, etc.
         split: used to infer the data used for training or testing.
              All files are in .pt format of a dictionary with image keys and
              image features (pytorch tensors), captions (list of str, support multiple
@@ -243,7 +243,8 @@ class RetrievalDataset(Dataset):
                 self.has_caption_indexs = False
         self.output_mode = args.output_mode
         self.tokenizer = tokenizer
-        self.max_seq_len = args.max_seq_length
+        self.max_caption_seq_len = args.max_caption_seq_len
+        self.max_labels_seq_len = args.max_labels_seq_len
         self.max_img_seq_len = args.max_img_seq_length
         self.args = args
 
@@ -276,6 +277,7 @@ class RetrievalDataset(Dataset):
                 od_labels = ' '.join(self.labels[img_key]['class'])
             return od_labels
 
+    # Function not compatible with the changes introducted with ALADIN-2.0
     def tensorize_example(self, text_a, img_feat, text_b=None,
                           cls_token_segment_id=0, pad_token_segment_id=0,
                           sequence_a_segment_id=0, sequence_b_segment_id=1, return_lengths=False):
@@ -351,12 +353,13 @@ class RetrievalDataset(Dataset):
                           sequence_a_segment_id=0, sequence_b_segment_id=1, return_lengths=False):
         assert (text_a is None and img_feat is not None and text_b is not None) or (text_a is not None and img_feat is None and text_b is None)
         clip_tokens_len = 77
+        self.max_seq_len = self.max_labels_seq_len if text_b is not None else self.max_caption_seq_len # splitting max_seq_len for captions and labels
         if text_a is not None:
             #tokenization of caption without CLIP
             if not self.clip_enabled_captions:
                 tokens_a = self.tokenizer.tokenize(text_a)
-                if len(tokens_a) > self.args.max_seq_length - 2:
-                    tokens_a = tokens_a[:(self.args.max_seq_length - 2)]
+                if len(tokens_a) > self.max_seq_len - 2:
+                    tokens_a = tokens_a[:(self.max_seq_len - 2)]
 
                 tokens = [self.tokenizer.cls_token] + tokens_a + [self.tokenizer.sep_token]
                 segment_ids = [cls_token_segment_id] + [sequence_a_segment_id] * (len(tokens_a) + 1)
@@ -395,15 +398,25 @@ class RetrievalDataset(Dataset):
                     labels = text_b.split(' ')
                     label_dict = {key: labels.count(key) for key in set(labels)} #create dictionary with label as key and occurences as value
                     labels = []
-                    
+                    numbers = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'many']
+                    #creation labels with n_occurences + label
                     for key in label_dict.keys():
-                        if '(' not in key:
-                            labels.append(str(label_dict[key]) + " " + self.inflect.plural(key))
+                        # if the number of occurences is higher then 1 the label is transformed in plural form
+                        
+                        if label_dict[key] > 1:
+                            number = numbers[label_dict[key]] if label_dict[key] <= 10 else numbers[-1] # if higher than 10 the sentence will be 'a photo of many labels'
+                            if '(' not in key:
+                                labels.append(number + " " + self.inflect.plural(key))
+                            else: 
+                                #if the label is in the format label_(description) it will be transformed into labels_(description)
+                                labels.append(number + " " + self.inflect.plural(key.split('_')[0]) + '_' + '_'.join(key.split('_')[1:]))
+                        # if there is only one occurence the article is added
                         else:
-                            labels.append(str(label_dict[key]) + " " + self.inflect.plural(key.split('_')[0]) + '_' + '_'.join(key.split('_')[1:]))
+                            labels.append("a " + key) 
                 
 
-                input_tokenizer = [prompt + x.replace('_', ' ').replace('(', '').replace(')', '') for x in labels[:self.max_seq_len]] # generates list with a sentence for each label
+                input_tokenizer = [prompt + x.replace('_', ' ').replace('(', '').replace(')', '') for x in labels[:self.max_seq_len - 1]] # generates list with a sentence for each label
+                input_tokenizer.insert(0, 'start of the sequence') #adding starting element
                 input_ids = clip.tokenize(input_tokenizer).tolist() # returns tensor of dimension [n_labels, 77]
                 seq_len = len(input_ids)
                 seq_padding_len = self.max_seq_len - seq_len

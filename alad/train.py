@@ -52,12 +52,16 @@ def main():
                         help="Pretrained config name or path if not the same as model_name.")
     parser.add_argument("--tokenizer_name", default="", type=str,
                         help="Pretrained tokenizer name or path if not the same as model_name.")
-    parser.add_argument("--max_seq_length", default=70, type=int,
-                        help="The maximum total input sequence length after tokenization. "
+    parser.add_argument("--max_caption_seq_len", default=70, type=int,
+                        help="The maximum total input sequence length after tokenization for captions. "
                              "Sequences longer than this will be truncated, "
                              "sequences shorter will be padded."
                              "This number is calculated on COCO dataset"
                              "If add object detection labels, the suggested length should be 70.")
+    parser.add_argument("--max_labels_seq_len", default=70, type=int,
+                        help="The maximum total input sequence length after tokenization for labels. "
+                             "Sequences longer than this will be truncated, "
+                             "sequences shorter will be padded.")
     parser.add_argument("--do_train", action='store_true', help="Whether to run training.")
     parser.add_argument("--do_test", action='store_true', help="Whether to run inference.")
     parser.add_argument("--do_eval", action='store_true', help="Whether to run performance valuation."
@@ -216,10 +220,12 @@ def main():
     config['detection_type'] = args.detection_type = config['detection_type'] if 'detection_type' in config.keys() else 'det'
     config['enable_clip_captions'] = args.enable_clip_captions = config['enable_clip_captions'] if 'enable_clip_captions' in config.keys() else False
     config['enable_clip_labels'] = args.enable_clip_labels = config['enable_clip_labels'] if 'enable_clip_labels' in config.keys() else False
-    config['max_seq_len'] = args.max_seq_length
-    
+    config['max_caption_seq_len'] = args.max_caption_seq_len
+    config['max_labels_seq_len'] = args.max_labels_seq_len
+        
     print("Configuration detectors, label encoding and captions encoding:")
     print("detection_type: %s, enable_clip_labels: %s, enable_clip_captions: %s" % (config['detection_type'], config['enable_clip_labels'], config['enable_clip_captions']))
+    print("Aggregation type: %s" % args.aggregation_type)
     
     args = restore_training_settings(args)
     
