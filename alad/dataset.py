@@ -54,7 +54,7 @@ class RetrievalDataset(Dataset):
         
         self.img_file = args.img_feat_file
         label_data_dir = op.dirname(self.img_file)
-        self.img_tsv = TSVFile(os.path.join(label_data_dir, "features.tsv")) if self.detection_type == 'det+fast' else None
+        self.img_tsv = TSVFile(os.path.join(label_data_dir, "features.tsv")) if 'fast' in self.detection_type else None
         caption_file = op.join(args.data_dir, '{}_captions.pt'.format(split))
         self.captions = torch.load(caption_file)
         self.img_keys = list(self.captions.keys())  # img_id as int
@@ -69,63 +69,68 @@ class RetrievalDataset(Dataset):
         
         self.box_ordering = {} # in case the detection_type is det+fast we keep in this dictionary the order of the boxes
                                # survived to NMS based on the normalized score in the format {image_id: [ordered list of boxes]}
+        self.labels = {}
         
         if args.add_od_labels:
             #retrieves the detections of Detic from the shelve
             label_data_dir = op.dirname(self.img_file)
-            #label_detic_pkl_path = os.path.join(label_data_dir, f"detic_labels_{split}.pkl")
-            label_detic_pkl_path = f"detic_labels_{split}.pkl"
-            # get the labels of Detic from pickle file if exists for this split 
-            if (os.path.exists(label_detic_pkl_path)):
-                with open(label_detic_pkl_path, 'rb') as fid:
-                    self.labels = pickle.load(fid)
-            else:
-                label_file = self.img_file
+            if 'det' in self.detection_type:
+                #label_detic_pkl_path = os.path.join(label_data_dir, f"detic_labels_{split}.pkl")
+                label_detic_pkl_path = f"detic_labels_{split}.pkl"
+                # get the labels of Detic from pickle file if exists for this split 
                 
-                self.labels = {}
-                
-                print("Retrieving predictions from shelve:")
-                for image_id in tqdm(self.img_keys):
-                    row = self.predictions_shelve[str(image_id)]
-                    if int(image_id) in self.img_keys:
-                        objects = row['objects']
-                        self.labels[int(image_id)] = {
-                            "image_h": row['image_h'],
-                            "image_w": row['image_w'],
-                            "class": [cur_d['class'] for cur_d in objects],
-                            "conf": [cur_d['conf'] for cur_d in objects], # relevant only if det+fast is the detection_type
-                            "boxes": np.array([cur_d['rect'] for cur_d in objects], dtype=np.float32)
-                        }
-                #caching self.labels
-                with open(label_detic_pkl_path, 'wb') as fid:
-                    pickle.dump(self.labels, fid)
+                if (os.path.exists(label_detic_pkl_path)):
+                    with open(label_detic_pkl_path, 'rb') as fid:
+                        self.labels = pickle.load(fid)
+                else:
+                    label_file = self.img_file
+                    
+                    
+                    
+                    print("Retrieving predictions from shelve:")
+                    for image_id in tqdm(self.img_keys):
+                        row = self.predictions_shelve[str(image_id)]
+                        if int(image_id) in self.img_keys:
+                            objects = row['objects']
+                            self.labels[int(image_id)] = {
+                                "image_h": row['image_h'],
+                                "image_w": row['image_w'],
+                                "class": [cur_d['class'] for cur_d in objects],
+                                "conf": [cur_d['conf'] for cur_d in objects], # relevant only if det+fast is the detection_type
+                                "boxes": np.array([cur_d['rect'] for cur_d in objects], dtype=np.float32)
+                            }
+                    #caching self.labels
+                    with open(label_detic_pkl_path, 'wb') as fid:
+                        pickle.dump(self.labels, fid)
         
-            # if in the args it is specified the det+fast detection type, we also retrieve the detections from faster 
-            # then we effettuate NMS with the score of Faster boxes prioritarized
-            # then we normalize the scores and order the box decrescently based on this value
-            if self.detection_type == 'det+fast':
+            
+            if 'fast' in self.detection_type:
                 label_file_tsv = os.path.join(label_data_dir, "predictions.tsv")
                 self.label_tsv = TSVFile(label_file_tsv)
-                #in order to normalize score we calculate the mean and the standard deviation of the two sets
-                #Detic
-                det_scores = []
-                for key in self.labels:
-                    score_tmp = [x for x in self.labels[key]['conf']]
-                    det_scores += score_tmp
-                det_mean = np.array(det_scores).mean()
-                det_std = np.array(det_scores).std()
-                #Faster
-                fast_scores = []
-                for line_no in range(self.label_tsv.num_rows()):
-                    row = self.label_tsv.seek(line_no)
-                    image_id = row[0]
-                    if int(image_id) in self.img_keys:
-                        results = json.loads(row[1])
-                        objects = results['objects']
-                        score_tmp = [x['conf'] for x in objects]
-                        fast_scores += score_tmp
-                fast_mean = np.array(fast_scores).mean()
-                fast_std = np.array(fast_scores).std()
+                # if in the args it is specified the det+fast detection type, we also retrieve the detections from faster 
+                # then we effettuate NMS with the score of Faster boxes prioritarized
+                # then we normalize the scores and order the box decrescently based on this value
+                if self.detection_type == 'det+fast':
+                    #in order to normalize score we calculate the mean and the standard deviation of the two sets
+                    #Detic
+                    det_scores = []
+                    for key in self.labels:
+                        score_tmp = [x for x in self.labels[key]['conf']]
+                        det_scores += score_tmp
+                    det_mean = np.array(det_scores).mean()
+                    det_std = np.array(det_scores).std()
+                    #Faster
+                    fast_scores = []
+                    for line_no in range(self.label_tsv.num_rows()):
+                        row = self.label_tsv.seek(line_no)
+                        image_id = row[0]
+                        if int(image_id) in self.img_keys:
+                            results = json.loads(row[1])
+                            objects = results['objects']
+                            score_tmp = [x['conf'] for x in objects]
+                            fast_scores += score_tmp
+                    fast_mean = np.array(fast_scores).mean()
+                    fast_std = np.array(fast_scores).std()
                 
         
                 for line_no in tqdm(range(self.label_tsv.num_rows())):
@@ -135,7 +140,7 @@ class RetrievalDataset(Dataset):
                         results = json.loads(row[1])
                         objects = results['objects'] if type(
                             results) == dict else results
-                        # check if the image is not present in the Detic detections (it should never happen)
+                        # check if the image is not present in the Detic detections (it should never happen if detection_type == 'det+fast')
                         if (int(image_id) not in self.labels.keys()):
                             self.labels[int(image_id)] = {
                                 "image_h": results["image_h"] if type(
@@ -524,28 +529,29 @@ class RetrievalDataset(Dataset):
 
     def get_image(self, image_id):
         image_idx = self.image_id2idx[str(image_id)]
-        
-        #Detic features
-        img_data = self.predictions_shelve[str(image_id)]
-        objects = img_data['objects']
-        features_det = np.array([obj['features'] for obj in objects], dtype='float32')
+        features_det = None
+        if 'det' in self.detection_type:
+            #Detic features
+            img_data = self.predictions_shelve[str(image_id)]
+            objects = img_data['objects']
+            features_det = np.array([obj['features'] for obj in objects], dtype='float32')
 
-        # concatenate positional information to the image feature (so that they become 1024 + 6 = 1030-dimensional)
-        w = img_data["image_w"]
-        h = img_data["image_h"]
-        if len(objects) > 0:
-            rect = np.asarray([obj["rect"] for obj in objects], dtype='float32')
-            mask = np.array([w, h, w, h], dtype=np.float32)
-            rect = np.clip(rect / mask, 0, 1)
-            pos_feat = np.concatenate((rect, rect[:, [3]]-rect[:, [1]], rect[:, [2]]-rect[:, [0]]), axis=1).astype(np.float32)
-            features_det = np.hstack((features_det, pos_feat))
-        else:
-            features_det = None
-        features = features_det
+            # concatenate positional information to the image feature (so that they become 1024 + 6 = 1030-dimensional)
+            w = img_data["image_w"]
+            h = img_data["image_h"]
+            if len(objects) > 0:
+                rect = np.asarray([obj["rect"] for obj in objects], dtype='float32')
+                mask = np.array([w, h, w, h], dtype=np.float32)
+                rect = np.clip(rect / mask, 0, 1)
+                pos_feat = np.concatenate((rect, rect[:, [3]]-rect[:, [1]], rect[:, [2]]-rect[:, [0]]), axis=1).astype(np.float32)
+                features_det = np.hstack((features_det, pos_feat))
+            else:
+                features_det = None
+            features = features_det
         
         # in case the detection_type is setted on det+fast we also retrieve Faster features
         # then we pad Detic features and we effettuate the sorting
-        if self.detection_type == 'det+fast':
+        if 'fast' in self.detection_type:
             row = self.img_tsv.seek(image_idx)
             num_boxes = int(row[1])
             features_fast = np.frombuffer(base64.b64decode(row[-1]),
@@ -560,7 +566,7 @@ class RetrievalDataset(Dataset):
             else:
                 features_tmp = features_fast
             #keeping only the relevant boxes using the normalized score order
-            features = [features_tmp[id] for id in self.box_ordering[image_id]] 
+            features = [features_tmp[id] for id in self.box_ordering[image_id]] if self.detection_type == 'det+fast' else features #orders features if nms was applied
             features = np.array(features,dtype=np.float32)
         t_features = torch.from_numpy(features)
         return t_features
