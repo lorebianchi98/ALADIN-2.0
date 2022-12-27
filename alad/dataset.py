@@ -552,6 +552,11 @@ class RetrievalDataset(Dataset):
                 features_det = np.hstack((features_det, pos_feat))
             else:
                 features_det = None
+            #padding done if it is requested in order to activate linear mapping 
+            if 'det_padded' == self.detection_type:
+                len_diff = 1024
+                pad = np.zeros((len(features_det), len_diff), dtype=np.float32)
+                features_det = np.hstack((features_det, pad))
             features = features_det
         
         # in case the detection_type is setted on det+fast we also retrieve Faster features
