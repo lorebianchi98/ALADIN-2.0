@@ -110,7 +110,7 @@ class RetrievalDataset(Dataset):
                 # if in the args it is specified the det+fast detection type, we also retrieve the detections from faster 
                 # then we effettuate NMS with the score of Faster boxes prioritarized
                 # then we normalize the scores and order the box decrescently based on this value
-                if self.detection_type == 'det+fast':
+                if 'det+fast' in self.detection_type:
                     #in order to normalize score we calculate the mean and the standard deviation of the two sets
                     #Detic
                     det_scores = []
@@ -209,6 +209,11 @@ class RetrievalDataset(Dataset):
                             self.labels[int(image_id)]['boxes'] = filtered_boxes
                             self.labels[int(image_id)]['class'] = filtered_classes
                             self.labels[int(image_id)]['confs'] = filtered_confs
+                
+                #if the detection_type is setted to det+fast_labels we set the detection_type to fast after NMS
+                #in this way the get_image will retrieve only the features of Faster
+                self.detection_type = 'fast' if self.detection_type == 'det+fast_labels' else self.detection_type
+                
                 
                 self.label_tsv._fp.close()
                 self.label_tsv._fp = None
@@ -564,7 +569,7 @@ class RetrievalDataset(Dataset):
                 features_det = np.hstack((features_det, pad))
                 features_tmp = np.append(features_det, features_fast, axis=0)
             else:
-                features_tmp = features_fast
+                features = features_fast
             #keeping only the relevant boxes using the normalized score order
             features = [features_tmp[id] for id in self.box_ordering[image_id]] if self.detection_type == 'det+fast' else features #orders features if nms was applied
             features = np.array(features,dtype=np.float32)
