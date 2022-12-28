@@ -300,7 +300,8 @@ def test(test_loader, model, measure='cosine', log_step=10, ndcg_scorer=None, al
 
     logging.info("Text to image: %.1f, %.1f, %.1f, %.1f, %.1f, ndcg_rouge=%.4f ndcg_spice=%.4f" %
                  (r1i, r5i, r10i, medri, meanr, mean_rougel_ndcg_i, mean_spice_ndcg_i))
-
+    logging.info("Alignment head rsum: %.1f" % (r1+r5+r10+r1i+r5i+r10i))
+    
 def restore_training_settings(args):
     assert not args.do_train and (args.do_test or args.do_eval)
     train_args = torch.load(op.join(args.eval_model_dir, 'training_args.bin'))
