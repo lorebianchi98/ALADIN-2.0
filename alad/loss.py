@@ -3,7 +3,7 @@ from torch import nn as nn
 from torch.nn import functional as F
 from .utils import l2norm
 from math import sqrt
-
+import numpy as np
 
 def dot_sim(im, s):
     """Cosine similarity between all the image and sentence pairs
@@ -38,33 +38,54 @@ class Contrastive(nn.Module):
             self.sim = dot_sim
 
         self.max_violation = max_violation
+        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
-    def compute_contrastive_loss(self, scores):
-        diagonal = scores.diag().view(scores.size(0), 1)
-        d1 = diagonal.expand_as(scores)
-        d2 = diagonal.t().expand_as(scores)
+    def compute_contrastive_loss(self, scores, ltype='infonce'):
+        if ltype == 'infonce':
+            # cosine similarity as logits
+            logit_scale = self.logit_scale.exp()
+            logits_per_image = logit_scale * scores
+            logits_per_text = logits_per_image.t()
 
-        # compare every diagonal score to scores in its column
-        # caption retrieval
-        cost_s = (self.margin + scores - d1).clamp(min=0)
-        # compare every diagonal score to scores in its row
-        # image retrieval
-        cost_im = (self.margin + scores - d2).clamp(min=0)
+            # compute bidirectional CE loss
+            num_logits = logits_per_image.shape[0]
+            labels = torch.arange(num_logits, device=logits_per_image.device, dtype=torch.long)
+            loss = (
+                F.cross_entropy(logits_per_image, labels) +
+                F.cross_entropy(logits_per_text, labels)
+                ) / 2
 
-        # clear diagonals
-        mask = torch.eye(scores.size(0)) > .5
-        I = mask
-        if torch.cuda.is_available():
-            I = I.cuda()
-        cost_s = cost_s.masked_fill_(I, 0)
-        cost_im = cost_im.masked_fill_(I, 0)
+        elif ltype == 'triplet':
+            diagonal = scores.diag().view(scores.size(0), 1)
+            d1 = diagonal.expand_as(scores)
+            d2 = diagonal.t().expand_as(scores)
 
-        # keep the maximum violating negative for each query
-        if self.max_violation:
-            cost_s = cost_s.max(1)[0]
-            cost_im = cost_im.max(0)[0]
+            # compare every diagonal score to scores in its column
+            # caption retrieval
+            cost_s = (self.margin + scores - d1).clamp(min=0)
+            # compare every diagonal score to scores in its row
+            # image retrieval
+            cost_im = (self.margin + scores - d2).clamp(min=0)
 
-        return cost_s.sum() + cost_im.sum()
+            # clear diagonals
+            mask = torch.eye(scores.size(0)) > .5
+            I = mask
+            if torch.cuda.is_available():
+                I = I.cuda()
+            cost_s = cost_s.masked_fill_(I, 0)
+            cost_im = cost_im.masked_fill_(I, 0)
+
+            # keep the maximum violating negative for each query
+            if self.max_violation:
+                cost_s = cost_s.max(1)[0]
+                cost_im = cost_im.max(0)[0]
+
+            loss = cost_s.sum() + cost_im.sum()
+
+        else:
+            raise ValueError(f'{ltype} not known!')
+            
+        return loss
 
 
 class AlignmentContrastiveLoss(Contrastive):
