@@ -239,11 +239,11 @@ def main():
     # creating the file where rsum will be stored
     # WARN: precedent  file will be deleted
     # if you want to avoid that, comment the next line
-    rsum_file = open('rsum_valutation/rsum.txt', 'w+')
+    #rsum_file = open('rsum_valutation/rsum.txt', 'w+')
     # not optimized code!
     # some of the instruction inside the loop could be outside
     for max_img_seq_len in range(args.start, args.end, args.step):
-        args.max_img_seq_len = max_img_seq_len
+        args.max_img_seq_length = max_img_seq_len
         config['max_labels_seq_len'] = args.max_labels_seq_len = 84 - max_img_seq_len
         
         test_dataset = RetrievalDataset(tokenizer, args, split, is_train=is_train)
@@ -286,10 +286,11 @@ def main():
             student_model.cuda()
         print('Model checkpoint loaded!')
         
-        print("Evaluate model (%d label, %d image)" % (args.max_labels_seq_len, args.max_img_seq_len))
+        print("Evaluate model (%d label, %d image)" % (args.max_labels_seq_len, args.max_img_seq_length))
         rsum = test(test_loader, student_model, alignment_mode=alignment_mode)
         #storing the results on file
-        rsum_file.write("(%d label, %d image): %s" % (args.max_labels_seq_len, args.max_img_seq_len, str(rsum)))
+        with open('rsum_valutation/rsum.txt', 'a') as rsum_file:
+            rsum_file.write("(%d label, %d image): %s\n" % (args.max_labels_seq_len, args.max_img_seq_length, str(rsum)))
 
 
 
@@ -309,9 +310,9 @@ def test(test_loader, model, measure='cosine', log_step=10, ndcg_scorer=None, al
     print('Evaluating alignment head...')
     r1 = r5 = r10 = r1i = r5i = r10i = 0
     # caption retrieval
-    # (r1, r5, r10, medr, meanr, mean_rougel_ndcg, mean_spice_ndcg) = i2t(img_embs, cap_embs, img_lenghts, cap_lenghts, measure=measure, ndcg_scorer=ndcg_scorer, sim_function=sim_matrix_fn, cap_batches=5)
-    # logging.info("Image to text: %.1f, %.1f, %.1f, %.1f, %.1f, ndcg_rouge=%.4f ndcg_spice=%.4f" %
-    #              (r1, r5, r10, medr, meanr, mean_rougel_ndcg, mean_spice_ndcg))
+    (r1, r5, r10, medr, meanr, mean_rougel_ndcg, mean_spice_ndcg) = i2t(img_embs, cap_embs, img_lenghts, cap_lenghts, measure=measure, ndcg_scorer=ndcg_scorer, sim_function=sim_matrix_fn, cap_batches=5)
+    logging.info("Image to text: %.1f, %.1f, %.1f, %.1f, %.1f, ndcg_rouge=%.4f ndcg_spice=%.4f" %
+                 (r1, r5, r10, medr, meanr, mean_rougel_ndcg, mean_spice_ndcg))
     # image retrieval
     (r1i, r5i, r10i, medri, meanr, mean_rougel_ndcg_i, mean_spice_ndcg_i) = t2i(
         img_embs, cap_embs, img_lenghts, cap_lenghts, ndcg_scorer=ndcg_scorer, measure=measure, sim_function=sim_matrix_fn, im_batches=5)
