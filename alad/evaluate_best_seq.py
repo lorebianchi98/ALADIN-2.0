@@ -191,7 +191,7 @@ def main():
     args.per_gpu_eval_batch_size = config['training']['bs']
     
     
-    config['detection_type'] = args.detection_type = config['detection_type'] if 'detection_type' in config.keys() else 'det'
+    config['detection_type'] = args.detection_type = config['detection_type'] if 'detection_type' in config.keys() else 'fast'
     config['enable_clip_captions'] = args.enable_clip_captions = config['enable_clip_captions'] if 'enable_clip_captions' in config.keys() else False
     config['enable_clip_labels'] = args.enable_clip_labels = config['enable_clip_labels'] if 'enable_clip_labels' in config.keys() else False
     config['max_caption_seq_len'] = args.max_caption_seq_len
@@ -239,7 +239,8 @@ def main():
     # creating the file where rsum will be stored
     # WARN: precedent  file will be deleted
     # if you want to avoid that, comment the next line
-    #rsum_file = open('rsum_valutation/rsum.txt', 'w+')
+    #rsum_file = open('rsum_valutation/rsum.txt', 'w')
+    
     # not optimized code!
     # some of the instruction inside the loop could be outside
     for max_img_seq_len in range(args.start, args.end, args.step):
