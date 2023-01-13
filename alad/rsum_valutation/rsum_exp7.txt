@@ -1,0 +1,9 @@
+(55 label, 29 image): 556.0400000000001
+(50 label, 34 image): 557.02
+(45 label, 39 image): 557.54
+(40 label, 44 image): 557.44
+(35 label, 49 image): 557.6800000000001
+(30 label, 54 image): 557.96
+(25 label, 59 image): 557.86
+(20 label, 64 image): 557.96
+(15 label, 69 image): 558.0600000000001
