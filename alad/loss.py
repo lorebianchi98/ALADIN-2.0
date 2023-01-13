@@ -40,7 +40,7 @@ class Contrastive(nn.Module):
         self.max_violation = max_violation
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
-    def compute_contrastive_loss(self, scores, ltype='infonce'):
+    def compute_contrastive_loss(self, scores, ltype='triplet'):
         if ltype == 'infonce':
             # cosine similarity as logits
             logit_scale = self.logit_scale.exp()
