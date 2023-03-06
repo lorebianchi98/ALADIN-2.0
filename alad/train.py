@@ -502,7 +502,7 @@ def validate(val_loader, model, tb_logger, measure='cosine', log_step=10, ndcg_s
 
     print('Evaluating matching head...')
     r1_match, r5_match, r10_match, r1i_match, r5i_match, r10i_match, rsum_match = compute_recall(img_embs[:, 0, :], cap_embs[:, 0, :])
-    rsum = 0
+    rsum = rsum_match # 0 if we want to exclude matching head 
 
     # record matching metrics in tensorboard
     tb_logger.add_scalar('matching/r1', r1_match, model.Eiters)
